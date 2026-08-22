@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chaitin · Agent 答辩控制台</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <div><p class="eyebrow">CHAITIN / AGENT ENGINEERING DEFENSE</p><h1>安全研判控制台</h1><p class="subtitle">恶意样本研判 × 安全运营告警 · 可审计的回放演示</p></div>
+      <div class="badges"><span id="mode">REPLAY MODE</span><span class="boundary">● OCTOBUS ONLY</span></div>
+    </header>
+    <section class="workspace">
+      <aside class="chat-pane">
+        <div class="pane-title"><div><b>对话任务</b><small>点击只预填，手动发送才执行</small></div><span id="prepared" class="prepared">未选择</span></div>
+        <div class="case-filters"><button class="filter active" data-domain="all">全部</button><button class="filter" data-domain="malware">恶意样本</button><button class="filter" data-domain="security">安全运营</button></div>
+        <div id="case-list" class="case-list" aria-label="预置演示案例"></div>
+        <div id="conversation" class="conversation"><article class="bot">选择一个内置任务会预填输入框。确认内容后请手动点击“发送”，右侧才会开始演示对应链路。</article></div>
+        <form id="chat-form"><input id="prompt" maxlength="240" autocomplete="off" placeholder="输入脱敏研判请求；不会上传样本或访问外部站点"><button type="submit">发送 ↗</button></form>
+      </aside>
+      <section class="trace-pane">
+        <div class="trace-head"><div><p class="eyebrow">TRACE WORKBENCH</p><h2 id="trace-title">等待任务</h2><code id="trace-id">trace_id: —</code></div><div class="run-tags"><span id="verification" class="verification">未运行</span><span id="outcome" class="outcome neutral">未运行</span></div></div>
+        <div id="trace-summary" class="trace-summary"><span>选择并发送任务后，展示操作、证据、控制措施与答辩关注点。</span></div>
+        <nav class="tabs"><button class="active" data-tab="chain">全链路</button><button data-tab="logs">结构化日志</button><button data-tab="audit">审计记录</button><button data-tab="metrics">指标</button></nav>
+        <div class="panel active" id="chain"><div id="timeline" class="timeline"><p class="empty">状态机、RAG、OctoBus、人工复核会在此按 trace_id 串联。</p></div></div>
+        <div class="panel" id="logs"><div class="toolbar"><div><b>结构化日志</b><small>每行均可按 trace_id 回溯</small></div></div><div class="table-wrap"><table><thead><tr><th>时间</th><th>级别</th><th>状态</th><th>事件</th><th>控制措施</th></tr></thead><tbody id="log-view"><tr><td colspan="5" class="empty-cell">暂无日志</td></tr></tbody></table></div></div>
+        <div class="panel" id="audit"><div class="toolbar"><div><b>能力审计</b><small>仅展示脱敏的授权与结果摘要</small></div><button id="open-portainer" class="link-button">Portainer ↗</button></div><div class="table-wrap"><table><thead><tr><th>trace_id</th><th>能力</th><th>边界</th><th>结果</th><th>证据摘要</th></tr></thead><tbody id="audit-view"><tr><td colspan="5" class="empty-cell">暂无审计记录</td></tr></tbody></table></div></div>
+        <div class="panel" id="metrics"><div class="toolbar"><div><b>演示指标</b><small>点击指标卡下钻计算口径与当前值</small></div></div><div id="metric-grid" class="metric-grid"></div><p class="hint">指标来自本次浏览器会话与 `/metrics` 暴露的计数；不是生产监控，也不会保存样本或敏感审计正文。</p></div>
+      </section>
+    </section>
+    <footer>演示为稳定、脱敏的回放。真实 Agent 只能经 OctoBus Connect RPC 调用能力；页面不持有模型密钥、Capset token、IOC 或原始样本。</footer>
+  </main>
+  <dialog id="metric-dialog"><form method="dialog"><button class="dialog-close" aria-label="关闭">×</button></form><p class="eyebrow">METRIC DRILLDOWN</p><h2 id="metric-dialog-title"></h2><dl id="metric-dialog-body"></dl></dialog>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
