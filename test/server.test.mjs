@@ -17,9 +17,22 @@ test('serves replay cases without sample material and exposes metrics', async ()
   const result = await fetch(`${base}/api/replay`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ caseId: 'malware-normal' }) }).then((response) => response.json());
   assert.equal(result.outcome, 'HUMAN_REVIEW_REQUIRED');
   assert.ok(result.traceId.startsWith('demo-'));
+  assert.deepEqual(result.octobus, { service: 'malware-analysis-service', instance: 'malware-analysis-demo', capset: 'malware-analysis' });
+  assert.equal(result.audit[0].traceId, result.traceId);
+  assert.equal(result.llm.status, 'OK · schema validated');
   const metrics = await fetch(`${base}/metrics`).then((response) => response.text());
   assert.match(metrics, /chaitin_demo_replay_total\{domain="malware"\} 1/);
 }));
+
+test('only returns a safe optional Portainer navigation URL', async () => {
+  const prior = process.env.PORTAINER_URL;
+  process.env.PORTAINER_URL = 'javascript:alert(1)';
+  await withServer(async (base) => {
+    const config = await fetch(`${base}/api/config`).then((response) => response.json());
+    assert.equal(config.portainerUrl, '');
+  });
+  if (prior === undefined) delete process.env.PORTAINER_URL; else process.env.PORTAINER_URL = prior;
+});
 
 test('does not expose a live backend bridge by default', async () => withServer(async (base) => {
   const response = await fetch(`${base}/api/live`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });

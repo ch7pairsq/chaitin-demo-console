@@ -16,14 +16,46 @@ const securityBase = [
 function trace(domain, id) { return `demo-${domain}-20260822-${id}`; }
 function buildCase({ id, domain, title, user, outcome, reply, steps, severity = 'medium', verification = 'replay' }) {
   const traceId = trace(domain, id);
+  const octobus = domain === 'security'
+    ? { service: 'security-triage-service', instance: 'security-triage-demo', capset: 'security-triage' }
+    : { service: 'malware-analysis-service', instance: 'malware-analysis-demo', capset: 'malware-analysis' };
   const fullSteps = steps.map(([state, detail, operation, evidence, guardrail, interviewerFocus], index) => ({
     sequence: index + 1, state, detail, operation, evidence, guardrail, interviewerFocus,
     at: `2026-08-22T13:${String(10 + index).padStart(2, '0')}:00Z`
   }));
   const logs = fullSteps.map((step) => ({ timestamp: step.at, level: /REFUSE|NEED|FAIL|MANUAL/.test(step.state) ? 'WARN' : 'INFO', traceId, state: step.state, message: step.detail, decision: step.guardrail }));
   const audit = fullSteps.filter((step) => /RETRIEVE_REPORT|ACQUIRE_CONTEXT|VALIDATE_CANDIDATE|CREATE_REVIEW_TASK|PERSIST_RESULT/.test(step.state))
-    .map((step) => ({ traceId, capability: step.state === 'ACQUIRE_CONTEXT' ? 'GetAlertContext' : step.state === 'PERSIST_RESULT' ? 'RecordTriageResult' : step.state === 'VALIDATE_CANDIDATE' ? 'ValidateYaraCandidate' : step.state === 'CREATE_REVIEW_TASK' ? 'CreateRuleReviewTask' : 'GetSanitizedReport', boundary: 'OctoBus Connect RPC', result: 'allowed / audited', evidence: step.evidence }));
-  return { id, domain, title, user, traceId, outcome, severity, verification, reply, steps: fullSteps, logs, audit };
+    .map((step, index) => ({
+      auditId: `audit-${id}-${String(index + 1).padStart(2, '0')}`,
+      traceId,
+      timestamp: step.at,
+      capability: step.state === 'ACQUIRE_CONTEXT' ? 'GetAlertContext' : step.state === 'PERSIST_RESULT' ? 'RecordTriageResult' : step.state === 'VALIDATE_CANDIDATE' ? 'ValidateYaraCandidate' : step.state === 'CREATE_REVIEW_TASK' ? 'CreateRuleReviewTask' : 'GetSanitizedReport',
+      boundary: 'OctoBus · Connect RPC',
+      service: octobus.service,
+      instance: octobus.instance,
+      capset: octobus.capset,
+      principal: `${domain}-agent / least-privilege token`,
+      result: 'ALLOWED · AUDITED',
+      policy: step.state === 'CREATE_REVIEW_TASK' || step.state === 'PERSIST_RESULT' ? 'write: idempotency key / no automatic retry' : 'read: timeout + bounded retry',
+      evidence: step.evidence
+    }));
+  const containsModel = fullSteps.some((step) => step.state === 'LLM_ANALYZE' || step.state === 'LLM_SUMMARIZE');
+  const llm = containsModel ? {
+    provider: 'DeepSeek API (server-side only)',
+    model: 'deepseek-chat',
+    requestPolicy: '仅发送 allow-list 脱敏特征与 citation_id；不发送样本、路径、IOC 正文、令牌或密钥。',
+    response: outcome === 'HUMAN_REVIEW_REQUIRED' && id === 'malware-llm'
+      ? '模型请求在 8 秒超时；确定性摘要已接管，保留人工复核。'
+      : domain === 'security'
+        ? '【受限解释】证据满足 fp_dns_001 的授权扫描条件；建议 suppress_with_review。风险等级与动作由规则引擎决定。'
+        : '【受限解释】行为与权限组合满足候选规则条件；引用 citation:report-02、citation:kb-07。候选规则必须先验证并人工复核。',
+    status: outcome === 'HUMAN_REVIEW_REQUIRED' && id === 'malware-llm' ? 'FALLBACK · deterministic narrator' : 'OK · schema validated',
+    citations: domain === 'security' ? ['evidence:alert-context-min', 'rule:fp_dns_001'] : ['citation:report-02', 'citation:kb-07'],
+    guardrail: '模型没有工具凭据、不可改变 severity/action，JSON 解析失败或超时即降级。'
+  } : {
+    provider: '未调用模型', model: '—', requestPolicy: '该路径在状态机入口拒绝、收集槽位或调用失败；模型未参与。', response: '无模型输出。', status: 'NOT INVOKED', citations: [], guardrail: '避免将闲聊、缺槽位或工具故障的输入无条件发送给 LLM。'
+  };
+  return { id, domain, title, user, traceId, outcome, severity, verification, reply, octobus, llm, steps: fullSteps, logs, audit };
 }
 
 export const demoCases = [

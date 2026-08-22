@@ -21,6 +21,13 @@ function metrics(response) {
 function secureHeaders(headers) {
   return { ...headers, 'x-content-type-options': 'nosniff', 'x-frame-options': 'SAMEORIGIN', 'referrer-policy': 'no-referrer', 'permissions-policy': 'camera=(), microphone=(), geolocation=()', 'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" };
 }
+function portainerUrl() {
+  const value = process.env.PORTAINER_URL || '';
+  try {
+    const parsed = new URL(value);
+    return ['http:', 'https:'].includes(parsed.protocol) ? parsed.toString() : '';
+  } catch { return ''; }
+}
 async function bodyOf(request) {
   let body = '';
   for await (const chunk of request) { body += chunk; if (body.length > 16_384) throw new Error('payload_too_large'); }
@@ -31,7 +38,7 @@ export function createDemoServer() {
   return createServer(async (request, response) => {
     try {
       const url = new URL(request.url, `http://${request.headers.host}`);
-      if (request.method === 'GET' && url.pathname === '/api/config') return json(response, 200, { mode, portainerUrl: process.env.PORTAINER_URL || '' });
+      if (request.method === 'GET' && url.pathname === '/api/config') return json(response, 200, { mode, portainerUrl: portainerUrl() });
       if (request.method === 'GET' && url.pathname === '/api/cases') return json(response, 200, demoCases.map(({ logs, audit, ...item }) => item));
       if (request.method === 'GET' && url.pathname === '/metrics') return metrics(response);
       if (request.method === 'POST' && url.pathname === '/api/replay') {
