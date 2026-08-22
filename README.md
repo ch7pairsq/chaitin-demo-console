@@ -30,3 +30,15 @@ ghcr.io/ch7pairsq/chaitin-demo-console:sha-<commit>
 ```
 
 首次发布后，在 GitHub Packages 将镜像包设为可被部署服务器拉取；如果保持私有，服务器需使用只读 package token 登录 GHCR，不能把该 token 写入 Stack 文件。
+
+## Portainer 部署
+
+将 [deploy/portainer-service.yml](deploy/portainer-service.yml) 中的 `demo-console` 合并到现有 `chaitin` Stack；不要把它部署为第二个 Stack。它只从 GHCR 拉取已发布镜像，端口固定为 `127.0.0.1:7411`，不挂载 Docker socket、知识库、状态卷或任何密钥。
+
+首次确认镜像已由 GitHub Actions 发布后，在服务器执行：
+
+```bash
+docker pull ghcr.io/ch7pairsq/chaitin-demo-console:latest
+```
+
+若包为私有，使用权限最小的只读 package token 完成一次 `docker login ghcr.io`；不要将 token 填入 Portainer Stack 环境变量或仓库文件。

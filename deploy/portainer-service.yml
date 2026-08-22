@@ -1,0 +1,24 @@
+# Merge this service into the existing chaitin Portainer Stack.
+# It pulls a published GHCR image; Portainer never builds source code.
+services:
+  demo-console:
+    image: ghcr.io/ch7pairsq/chaitin-demo-console:latest
+    container_name: malware-triage-demo-console
+    restart: always
+    pull_policy: always
+    environment:
+      DEMO_MODE: replay
+      DEMO_CONSOLE_PORT: 7411
+      # Non-secret optional navigation link; leave blank to hide the action.
+      PORTAINER_URL: ${PORTAINER_URL:-}
+    ports:
+      - 127.0.0.1:7411:7411
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - chaitin-net
