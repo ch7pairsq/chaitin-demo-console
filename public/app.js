@@ -91,7 +91,7 @@ function showMetric(metric) {
 async function render(result, run) {
   state.current = result; $('#trace-title').textContent = result.title; $('#trace-id').textContent = `trace_id: ${result.traceId}`;
   const outcome = $('#outcome'); outcome.textContent = label(result.outcome); outcome.className = `outcome ${/REVIEW|COMPLETED|ESCALATE/.test(result.outcome) ? 'ok' : 'warn'}`;
-  const verification = $('#verification'); verification.textContent = result.verification === 'local-tested' ? '本地代码已测' : '稳定回放'; verification.className = `verification ${result.verification}`;
+  const verification = $('#verification'); verification.textContent = result.verification === 'server-validated' ? '服务器联调已通过' : '稳定回放'; verification.className = `verification ${result.verification}`;
   $('#trace-summary').replaceChildren(textNode('span', `${result.domain === 'security' ? '安全运营 Agent' : '恶意样本 Agent'} · ${result.reply}`));
   renderTable('#log-view', result.logs, ['timestamp', 'level', 'state', 'message', 'decision'], '暂无日志');
   renderTable('#audit-view', result.audit, ['traceId', 'capability', 'boundary', 'result', 'evidence'], '此路径没有能力调用审计。');
