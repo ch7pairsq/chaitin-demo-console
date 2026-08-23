@@ -11,8 +11,41 @@ services:
       DEMO_CONSOLE_PORT: 7411
       # Non-secret optional navigation link; leave blank to hide the action.
       PORTAINER_URL: ${PORTAINER_URL:-}
+      # Release stays preview-only until a maintainer explicitly enables it.
+      RELEASE_MODE: ${RELEASE_MODE:-preview}
+      RELEASE_RUNNER_URL: http://release-runner:7420
+      RELEASE_RUNNER_TOKEN_FILE: /run/secrets/release_runner_token
+      RELEASE_UI_CONFIRMATION_FILE: /run/secrets/release_ui_confirmation
     ports:
       - 127.0.0.1:7411:7411
+    volumes:
+      - /data/chaitin/secrets/release-runner-token:/run/secrets/release_runner_token:ro
+      - /data/chaitin/secrets/release-ui-confirmation:/run/secrets/release_ui_confirmation:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - chaitin-net
+
+  # The only Stack component with access to Docker's control socket. It has no
+  # host port; requests must come from demo-console and carry its server secret.
+  release-runner:
+    image: ghcr.io/ch7pairsq/chaitin-demo-console:release-runner
+    container_name: chaitin-release-runner
+    restart: always
+    pull_policy: always
+    environment:
+      RELEASE_RUNNER_PORT: 7420
+      RELEASE_RUNNER_TOKEN_FILE: /run/secrets/release_runner_token
+      HOME: /tmp
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /data/chaitin/deploy-manifests:/deploy:rw
+      - /data/chaitin/secrets/release-runner-token:/run/secrets/release_runner_token:ro
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=32m

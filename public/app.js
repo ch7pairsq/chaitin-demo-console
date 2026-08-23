@@ -10,10 +10,11 @@ const runbook = [
   ['01', '登录与主机检查', '在受控终端使用本地私钥登录服务器；私钥文件始终留在本机，不复制到服务器、仓库或页面。', 'ssh -i <local-key-path> root@<server-ip>', '确认 Docker、磁盘空间和时间同步正常。'],
   ['02', '配置 Server Secret', '在 Portainer 的 Stack 环境变量/Secret 中配置 DeepSeek Key、两个独立 OctoBus token 与端点；只填写值，不在 Compose 或 Git 中写死。', 'Portainer → Stacks → chaitin → Environment variables / Secrets', '确认 .env 不提交，页面和容器日志也不回显密钥。'],
   ['03', '验证 OctoBus 三层注册', '在 OctoBus 控制台确认每个 Agent 分别被授权到 service → instance → capset；Agent 仅知道 OctoBus 地址。', 'security: security-triage-service → security-triage-demo → security-triage\nmalware: malware-analysis-service → malware-analysis-demo → malware-analysis', '确认能力、令牌和 Agent 一一对应；不可跨 capset 调用。'],
-  ['04', '用 Stack 发布', '在 Portainer 更新 chaitin Stack。服务应使用 restart: always，OctoBus 不发布公网端口，控制台只绑定 127.0.0.1。', 'Portainer → Stacks → chaitin → Update the stack', '确认 agent-compose、octobus、demo-console 均为 running。'],
+  ['04', '用 Stack 发布', '在 Portainer 更新 chaitin Stack。服务应使用 restart: always，OctoBus 不发布公网端口，控制台只绑定 127.0.0.1；首次启用发布中心时同时部署 release-runner。', 'Portainer → Stacks → chaitin → Update the stack', '确认 agent-compose、octobus、demo-console、release-runner 均为 running。'],
   ['05', '容器与重启验收', '从 Portainer 查看三个容器日志和重启策略；只通过 Stack 管理配置、重启与镜像更新。', 'Portainer → Stacks → chaitin → Containers', '重启 demo/Agent 后，SQLite 状态卷与 restart: always 应恢复；不要直接改生产容器。'],
   ['06', '在本页回放验证', '先跑“正常”案例，再依次演示槽位缺失、RAG 拒答、LLM 超时、OctoBus 失败和多轮切换。', '左侧选择案例 → 检查预填 → 手动发送', '逐项确认右侧 trace_id、OctoBus 三层链路、模型输出、审计卡和日志均一致。'],
-  ['07', '交付前边界复核', '确认无明文密钥、无样本、无 IOC 正文进入仓库或 UI；检查端口、审计和 README 操作记录。', 'git status && docker ps && Portainer Stack review', '保留 trace_id 与脱敏运行证据；异常应转人工而非绕过 OctoBus。']
+  ['07', '启用受控发布（可选）', '默认 RELEASE_MODE=preview。真实发布前，由管理员在服务器 Secret 文件配置 release-runner token 和页面确认码，再设置 RELEASE_MODE=enabled。', '在 /data/chaitin/secrets/ 创建两个 0600 secret 文件；不要填入仓库、Stack 文本或页面。', '发布器没有公网端口，且仅允许两个固定项目和已推送的 40 位 commit。'],
+  ['08', '交付前边界复核', '确认无明文密钥、无样本、无 IOC 正文进入仓库或 UI；检查端口、审计和 README 操作记录。', 'git status && docker ps && Portainer Stack review', '保留 trace_id 与脱敏运行证据；异常应转人工而非绕过 OctoBus。']
 ];
 
 function caseForMessage(message) {
@@ -106,6 +107,34 @@ function renderRunbook() {
     const checkLine = document.createElement('div'); checkLine.className = 'check-line'; checkLine.append(textNode('b', '检查点'), textNode('span', check)); card.append(checkLine); board.append(card);
   }
 }
+function releaseResult(message, tone = '') {
+  const box = $('#release-result'); box.textContent = message; box.className = `release-result ${tone}`;
+}
+function releaseMode() {
+  const release = state.config.release || { mode: 'preview', ready: false };
+  const badge = $('#release-mode');
+  badge.textContent = release.mode === 'enabled' && release.ready ? '真实发布已启用' : '预览模式 · 不执行';
+  badge.classList.toggle('enabled', release.mode === 'enabled' && release.ready);
+  $('#release-confirmation').disabled = release.mode !== 'enabled' || !release.ready;
+  $('#release-trigger').disabled = release.mode !== 'enabled' || !release.ready;
+  if (release.mode !== 'enabled' || !release.ready) releaseResult('默认预览模式：可检查发布步骤，但不会执行服务器操作。要真实发布，请先按初始化指引配置受控发布 Secret，并在 Stack 中设置 RELEASE_MODE=enabled。');
+}
+async function requestRelease(execute) {
+  const project = $('#release-project').value;
+  const commit = $('#release-commit').value.trim();
+  const confirmation = $('#release-confirmation').value;
+  if (!/^[a-f0-9]{40}$/i.test(commit)) { releaseResult('请输入已推送到 main 的 40 位 Git commit SHA。', 'error'); return; }
+  if (execute && !confirmation) { releaseResult('真实发布需要管理员在浏览器中临时输入确认码；该值不会保存。', 'error'); return; }
+  const button = execute ? $('#release-trigger') : $('#release-preview'); const prior = button.textContent; button.disabled = true; button.textContent = '处理中…';
+  try {
+    const response = await fetch('/api/release', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project, commit, confirmation: execute ? confirmation : undefined }) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'release_failed');
+    if (result.status === 'PREVIEW') releaseResult(`预览通过\n项目：${result.plan.project}\n提交：${result.plan.commit}\n步骤：${result.plan.stages.join(' → ')}\n未执行服务器操作。`, 'success');
+    else releaseResult(`发布完成\n项目：${result.result.project}\n提交：${result.result.commit}\n健康验证：${result.result.health}\nrelease_id：${result.result.releaseId}`, 'success');
+  } catch (error) { releaseResult(`发布请求未完成：${error.message}\n不会自动重试，避免重复发布。请在 Portainer 查看 release-runner 日志。`, 'error'); }
+  finally { button.disabled = false; button.textContent = prior; }
+}
 function metricDefinitions() {
   const current = state.current;
   return [
@@ -129,14 +158,16 @@ async function replay(id, userText) { const response = await fetch('/api/replay'
 function selectTab(button) { document.querySelectorAll('.tabs button').forEach((item) => item.classList.toggle('active', item === button)); document.querySelectorAll('.panel').forEach((item) => item.classList.toggle('active', item.id === button.dataset.tab)); }
 async function boot() {
   [state.cases, state.config] = await Promise.all([fetch('/api/cases').then((res) => res.json()), fetch('/api/config').then((res) => res.json())]);
-  $('#mode').textContent = `${state.config.mode.toUpperCase()} MODE`; renderCases(); renderMetrics(); renderRunbook();
+  $('#mode').textContent = `${state.config.mode.toUpperCase()} MODE`; renderCases(); renderMetrics(); renderRunbook(); releaseMode();
   document.querySelectorAll('.filter').forEach((button) => button.addEventListener('click', () => { state.domain = button.dataset.domain; document.querySelectorAll('.filter').forEach((item) => item.classList.toggle('active', item === button)); renderCases(); }));
   document.querySelectorAll('.tabs button').forEach((button) => button.addEventListener('click', () => selectTab(button)));
-  document.querySelectorAll('[data-tab-target]').forEach((button) => button.addEventListener('click', () => selectTab(document.querySelector(`[data-tab="${button.dataset.tabTarget}"]`))));
+  document.querySelectorAll('[data-dialog-target]').forEach((button) => button.addEventListener('click', () => $(`#${button.dataset.dialogTarget}`).showModal()));
   $('#open-portainer').addEventListener('click', () => state.config.portainerUrl ? window.open(state.config.portainerUrl, '_blank', 'noopener') : alert('未配置 PORTAINER_URL。请在 Portainer Stack 环境变量中设置控制台地址。'));
   $('#copy-trace').addEventListener('click', () => { if (state.current) copyText(state.current.traceId, $('#copy-trace')); });
   $('#audit-focus').addEventListener('click', () => { if (state.current) { copyText(state.current.traceId, $('#audit-focus')); $('#audit-focus').textContent = `当前 ${state.current.traceId}`; } });
   $('#copy-log-query').addEventListener('click', () => state.current ? copyText(`trace_id=\"${state.current.traceId}\"`, $('#copy-log-query')) : alert('请先发送一个案例。'));
+  $('#release-preview').addEventListener('click', () => requestRelease(false));
+  $('#release-trigger').addEventListener('click', () => requestRelease(true));
   $('#prompt').addEventListener('input', (event) => { if (event.target.value !== state.preparedText) clearPrepared(); });
   $('#chat-form').addEventListener('submit', async (event) => { event.preventDefault(); const input = $('#prompt'); const message = input.value.trim(); if (!message) return; const id = message === state.preparedText && state.preparedCaseId ? state.preparedCaseId : caseForMessage(message); input.value = ''; clearPrepared(); try { await replay(id, message); } catch { appendMessage('bot', '回放服务失败，请检查 demo-console 容器日志。'); } });
 }

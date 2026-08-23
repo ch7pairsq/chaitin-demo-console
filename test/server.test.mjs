@@ -10,7 +10,7 @@ async function withServer(run) {
 
 test('serves replay cases without sample material and exposes metrics', async () => withServer(async (base) => {
   const cases = await fetch(`${base}/api/cases`).then((response) => response.json());
-  assert.equal(cases.length, 10);
+  assert.equal(cases.length, 12);
   assert.equal(JSON.stringify(cases).includes('apk_base64'), false);
   assert.equal(JSON.stringify(cases).includes('203.0.113.77'), false);
   assert.ok(cases.some((item) => item.domain === 'security' && item.id === 'security-normal'));
@@ -38,4 +38,12 @@ test('does not expose a live backend bridge by default', async () => withServer(
   const response = await fetch(`${base}/api/live`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
   assert.equal(response.status, 501);
   assert.equal((await response.json()).error, 'live_mode_not_enabled');
+}));
+
+test('release endpoint is strict and defaults to a non-mutating preview', async () => withServer(async (base) => {
+  const invalid = await fetch(`${base}/api/release`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project: 'anything', commit: 'x' }) });
+  assert.equal(invalid.status, 400);
+  const preview = await fetch(`${base}/api/release`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project: 'security-triage-agent', commit: 'a'.repeat(40) }) });
+  assert.equal(preview.status, 200);
+  assert.equal((await preview.json()).status, 'PREVIEW');
 }));

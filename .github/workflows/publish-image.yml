@@ -43,6 +43,15 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
+          target: console
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: release-runner
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:release-runner
+            ${{ env.IMAGE_NAME }}:release-runner-${{ github.sha }}
