@@ -75,7 +75,7 @@ async function renderTimeline(result, run) {
     const top = document.createElement('div'); top.className = 'step-top'; top.append(textNode('b', step.state), textNode('span', step.detail, 'step-detail'), textNode('em', stepTone(step) === 'exception' ? '异常 / 降级' : stepTone(step) === 'boundary' ? '状态留存' : '执行中', 'step-badge')); body.append(top);
     const traceLine = document.createElement('div'); traceLine.className = 'step-trace'; traceLine.append(textNode('span', 'trace_id'), textNode('code', result.traceId)); body.append(traceLine);
     const facts = document.createElement('dl'); facts.className = 'step-facts';
-    for (const [name, value, tone] of [['关键操作', step.operation, ''], ['证据 / 输出', step.evidence, 'evidence'], ['安全控制', step.guardrail, 'guardrail'], ['答辩关注', step.interviewerFocus, 'question']]) { const row = document.createElement('div'); row.className = tone; row.append(textNode('dt', name), textNode('dd', value)); facts.append(row); }
+    for (const [name, value, tone] of [['关键操作', step.operation, ''], ['证据 / 输出', step.evidence, 'evidence'], ['安全控制', step.guardrail, 'guardrail'], ['研判关注', step.reviewFocus, 'question']]) { const row = document.createElement('div'); row.className = tone; row.append(textNode('dt', name), textNode('dd', value)); facts.append(row); }
     body.append(facts); item.append(rail, body); timeline.append(item); await wait(80);
   }
 }
@@ -116,7 +116,7 @@ function metricDefinitions() {
   ];
 }
 function renderMetrics() { const grid = $('#metric-grid'); clear(grid); for (const metric of metricDefinitions()) { const card = document.createElement('button'); card.type = 'button'; card.className = 'metric-card'; card.append(textNode('small', metric.name), textNode('strong', metric.value)); card.addEventListener('click', () => showMetric(metric)); grid.append(card); } }
-function showMetric(metric) { $('#metric-dialog-title').textContent = metric.name; const body = $('#metric-dialog-body'); clear(body); for (const [name, value] of [['当前值', metric.value], ['计算口径', metric.description], ['数据来源', metric.source], ['答辩解释', metric.interpretation]]) { const row = document.createElement('div'); row.append(textNode('dt', name), textNode('dd', value)); body.append(row); } $('#metric-dialog').showModal(); }
+function showMetric(metric) { $('#metric-dialog-title').textContent = metric.name; const body = $('#metric-dialog-body'); clear(body); for (const [name, value] of [['当前值', metric.value], ['计算口径', metric.description], ['数据来源', metric.source], ['指标说明', metric.interpretation]]) { const row = document.createElement('div'); row.append(textNode('dt', name), textNode('dd', value)); body.append(row); } $('#metric-dialog').showModal(); }
 async function render(result, run) {
   state.current = result; $('#trace-title').textContent = result.title; $('#trace-id').textContent = result.traceId; $('#copy-trace').disabled = false;
   const outcome = $('#outcome'); outcome.textContent = label(result.outcome); outcome.className = `outcome ${outcomeTone(result.outcome)}`;

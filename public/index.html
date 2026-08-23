@@ -2,19 +2,19 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Chaitin · Agent 答辩控制台</title>
+  <title>Chaitin · Agent 回放控制台</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <main class="shell">
     <header class="masthead">
-      <div class="brand"><p class="eyebrow">CHAITIN / AGENT ENGINEERING DEFENSE</p><h1>证据研判指挥桌</h1><p class="subtitle">对话触发 · 状态回放 · OctoBus 授权链路 · 可解释审计</p></div>
+      <div class="brand"><p class="eyebrow">CHAITIN / AGENT ENGINEERING REPLAY</p><h1>证据研判指挥桌</h1><p class="subtitle">对话触发 · 状态回放 · OctoBus 授权链路 · 可解释审计</p></div>
       <section class="readiness" aria-label="运行状态"><span class="live-dot"></span><div><b>安全回放环境就绪</b><small>浏览器不持有样本、密钥与能力令牌</small></div><span id="mode" class="mode-badge">REPLAY MODE</span></section>
     </header>
     <section class="command-strip" aria-label="部署与边界概览">
       <div class="portainer-card"><span class="card-kicker">INFRASTRUCTURE CONTROL</span><b>Portainer Stack</b><small>统一管理启动、重启、镜像更新与日志</small><button id="open-portainer" class="portainer-button">打开 Portainer ↗</button></div>
       <div class="boundary-card"><span class="card-kicker">HARD SECURITY BOUNDARY</span><b>Agent → OctoBus · Connect RPC</b><small>禁止直连业务后端；最小权限令牌仅驻留服务端</small></div>
-      <div class="guide-card"><span class="card-kicker">DEFENSE WALKTHROUGH</span><b>初始化与验证指引</b><small>按步骤准备环境，再用本页面验证完整链路</small><button class="ghost-button" data-tab-target="operations">查看指引 ↓</button></div>
+      <div class="guide-card"><span class="card-kicker">REPLAY WALKTHROUGH</span><b>初始化与验证指引</b><small>按步骤准备环境，再用本页面验证完整链路</small><button class="ghost-button" data-tab-target="operations">查看指引 ↓</button></div>
     </section>
     <section class="workspace">
       <aside class="chat-pane">
@@ -37,7 +37,7 @@
         <div class="panel" id="operations"><section class="operations-lede"><p class="eyebrow">SAFE INITIALIZATION RUNBOOK</p><h3>从登录服务器到回放验收</h3><p>按顺序执行。配置与服务控制统一在 Portainer Stack 中完成；令牌、API Key 与私钥只进入服务器的 Secret/环境注入，不贴进仓库、页面或聊天框。</p></section><div id="runbook" class="runbook"></div><section class="acceptance"><b>验收标准</b><span>服务重启自动恢复 · 仅本机端口发布 · Agent 不直连 · 审计可用 trace_id 回放 · 异常可降级到人工</span></section></div>
       </section>
     </section>
-    <footer>稳定、脱敏的答辩回放。真实 Agent 只能经 OctoBus Connect RPC 调用能力；此页面不持有模型密钥、Capset token、IOC 或原始样本。</footer>
+    <footer>稳定、脱敏的安全回放。真实 Agent 只能经 OctoBus Connect RPC 调用能力；此页面不持有模型密钥、Capset token、IOC 或原始样本。</footer>
   </main>
   <dialog id="metric-dialog"><form method="dialog"><button class="dialog-close" aria-label="关闭">×</button></form><p class="eyebrow">METRIC DRILLDOWN</p><h2 id="metric-dialog-title"></h2><dl id="metric-dialog-body"></dl></dialog>
   <script type="module" src="/app.js"></script>

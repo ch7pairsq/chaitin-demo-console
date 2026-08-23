@@ -19,8 +19,8 @@ function buildCase({ id, domain, title, user, outcome, reply, steps, severity = 
   const octobus = domain === 'security'
     ? { service: 'security-triage-service', instance: 'security-triage-demo', capset: 'security-triage' }
     : { service: 'malware-analysis-service', instance: 'malware-analysis-demo', capset: 'malware-analysis' };
-  const fullSteps = steps.map(([state, detail, operation, evidence, guardrail, interviewerFocus], index) => ({
-    sequence: index + 1, state, detail, operation, evidence, guardrail, interviewerFocus,
+  const fullSteps = steps.map(([state, detail, operation, evidence, guardrail, reviewFocus], index) => ({
+    sequence: index + 1, state, detail, operation, evidence, guardrail, reviewFocus,
     at: `2026-08-22T13:${String(10 + index).padStart(2, '0')}:00Z`
   }));
   const logs = fullSteps.map((step) => ({ timestamp: step.at, level: /REFUSE|NEED|FAIL|MANUAL/.test(step.state) ? 'WARN' : 'INFO', traceId, state: step.state, message: step.detail, decision: step.guardrail }));
