@@ -47,3 +47,22 @@ test('release endpoint is strict and defaults to a non-mutating preview', async 
   assert.equal(preview.status, 200);
   assert.equal((await preview.json()).status, 'PREVIEW');
 }));
+
+test('release preview never calls a runner even when formal release is enabled', async () => {
+  const prior = Object.fromEntries(['RELEASE_MODE', 'RELEASE_RUNNER_URL', 'RELEASE_RUNNER_TOKEN', 'RELEASE_UI_CONFIRMATION'].map((key) => [key, process.env[key]]));
+  process.env.RELEASE_MODE = 'enabled';
+  process.env.RELEASE_RUNNER_URL = 'http://release-runner:7420';
+  process.env.RELEASE_RUNNER_TOKEN = 'runner-test-token';
+  process.env.RELEASE_UI_CONFIRMATION = 'confirmation-test-token';
+  try {
+    await withServer(async (base) => {
+      const preview = await fetch(`${base}/api/release`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project: 'security-triage-agent', commit: 'b'.repeat(40), execute: false }) });
+      assert.equal(preview.status, 200);
+      assert.equal((await preview.json()).status, 'PREVIEW');
+      const release = await fetch(`${base}/api/release`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project: 'security-triage-agent', commit: 'b'.repeat(40), execute: true, confirmation: 'wrong' }) });
+      assert.equal(release.status, 403);
+    });
+  } finally {
+    for (const [key, value] of Object.entries(prior)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});

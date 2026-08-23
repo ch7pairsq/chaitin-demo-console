@@ -58,6 +58,24 @@ docker pull ghcr.io/ch7pairsq/chaitin-demo-console:latest
 
 若包为私有，使用权限最小的只读 package token 完成一次 `docker login ghcr.io`；不要将 token 填入 Portainer Stack 环境变量或仓库文件。
 
+## 将 release-runner 加入既有 Stack
+
+你当前的 `chaitin` Stack 若只显示 `agent-compose`、`octobus` 与 `demo-console`，说明受控发布器尚未部署。不要新建第二个 Stack：在 Portainer 的 `Stacks → chaitin → Editor` 中，将 [deploy/portainer-service.yml](deploy/portainer-service.yml) 里的完整 `release-runner:` 服务合并到既有 `services:` 下，并保留它的 `chaitin-net` 网络配置。随后更新 Stack。
+
+验收要求：容器名为 `chaitin-release-runner` 且状态为 `running`；它**没有** Published Port；只有它挂载 Docker socket，`demo-console` 不挂载。若镜像尚未出现在 GHCR，先等待本仓库 `main` 的 GitHub Actions 镜像构建完成，再更新 Stack。
+
+首次部署 runner 前，服务器还需要保留两个 Agent 的受控 Git 工作目录；它们挂载到 runner 的 `/deploy`，用于读取指定 commit 的 `agent-compose.yml`。在服务器以管理员身份一次性准备：
+
+```bash
+install -d -m 700 /data/chaitin/deploy-manifests
+git clone https://github.com/ch7pairsq/security-triage-agent.git /data/chaitin/deploy-manifests/security-triage-agent
+git clone https://github.com/ch7pairsq/malware-triage-agent.git /data/chaitin/deploy-manifests/malware-triage-agent
+install -m 600 /data/chaitin/deploy-manifests/security-triage-agent/.env.example /data/chaitin/deploy-manifests/security-triage-agent/.env
+install -m 600 /data/chaitin/deploy-manifests/malware-triage-agent/.env.example /data/chaitin/deploy-manifests/malware-triage-agent/.env
+```
+
+随后仅在服务器编辑两个 `.env` 文件，填入各自已有的 OctoBus/模型等部署值；不要提交、复制或显示这些文件。目录已存在时不要重复 `git clone`，先核对目录与 `.env` 权限均为 `600`。
+
 ## 受控发布器首次启用
 
 首次保持 `RELEASE_MODE=preview`，先在页面验证“发布中心”的预览路径。需要真实发布时，在服务器上由管理员创建下列两个不同的随机值文件，并设置为 `0600 root:root`：
@@ -67,4 +85,4 @@ docker pull ghcr.io/ch7pairsq/chaitin-demo-console:latest
 /data/chaitin/secrets/release-ui-confirmation
 ```
 
-然后把 Stack 的 `RELEASE_MODE` 改为 `enabled` 并更新 Stack。控制台将 token 仅转发给内网 `release-runner`；操作者在浏览器临时输入确认码后才能触发发布。发布器只允许 `security-triage-agent` 与 `malware-triage-agent`，并要求 commit 已位于远程 `main`，随后依次执行：`fetch → 固定 Git ref → agent-compose up → 项目/capset/无样本健康检查`。任何失败都不会自动重试或扩大 OctoBus 权限。
+然后把 Stack 的 `RELEASE_MODE` 改为 `enabled` 并更新 Stack。控制台将 token 仅转发给内网 `release-runner`；操作者在浏览器临时输入确认码后才能触发发布。无论该开关是否开启，“预览发布计划”都不会读取 Secret、连接发布器或改变服务器。发布器只允许 `security-triage-agent` 与 `malware-triage-agent`，并要求 commit 已位于远程 `main`，随后依次执行：`fetch → 固定 Git ref → agent-compose up → 项目/capset/无样本健康检查`。任何失败都不会自动重试或扩大 OctoBus 权限。

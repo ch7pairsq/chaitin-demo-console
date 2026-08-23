@@ -52,10 +52,12 @@ function releaseRequest(body) {
   const project = body?.project;
   const commit = body?.commit;
   const confirmation = body?.confirmation;
+  const execute = body?.execute;
   if (!['security-triage-agent', 'malware-triage-agent'].includes(project)) return null;
   if (typeof commit !== 'string' || !/^[a-f0-9]{40}$/i.test(commit)) return null;
   if (confirmation !== undefined && (typeof confirmation !== 'string' || confirmation.length > 128)) return null;
-  return { project, commit: commit.toLowerCase(), confirmation: confirmation ?? '' };
+  if (execute !== undefined && typeof execute !== 'boolean') return null;
+  return { project, commit: commit.toLowerCase(), confirmation: confirmation ?? '', execute: execute === true };
 }
 function sameSecret(a, b) {
   if (!a || !b) return false;
@@ -96,7 +98,9 @@ export function createDemoServer() {
         if (!payload) return json(response, 400, { error: 'invalid_release_request' });
         const settings = releaseSettings();
         const plan = releasePlan(payload);
-        if (settings.mode !== 'enabled') return json(response, 200, { status: 'PREVIEW', plan, message: '发布器处于预览模式；不会执行服务器操作。' });
+        // A preview never reads release secrets, calls the runner, or changes server state.
+        if (!payload.execute) return json(response, 200, { status: 'PREVIEW', plan, message: '预览请求不访问发布器，也不会执行服务器操作。' });
+        if (settings.mode !== 'enabled') return json(response, 403, { error: 'release_mode_preview' });
         if (!settings.ready) return json(response, 503, { error: 'release_runner_not_ready' });
         if (!sameSecret(payload.confirmation, settings.confirmation)) return json(response, 403, { error: 'release_confirmation_rejected' });
         if (releaseInFlight) return json(response, 429, { error: 'release_already_running' });

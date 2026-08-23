@@ -127,7 +127,7 @@ async function requestRelease(execute) {
   if (execute && !confirmation) { releaseResult('真实发布需要管理员在浏览器中临时输入确认码；该值不会保存。', 'error'); return; }
   const button = execute ? $('#release-trigger') : $('#release-preview'); const prior = button.textContent; button.disabled = true; button.textContent = '处理中…';
   try {
-    const response = await fetch('/api/release', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project, commit, confirmation: execute ? confirmation : undefined }) });
+    const response = await fetch('/api/release', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project, commit, execute, confirmation: execute ? confirmation : undefined }) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'release_failed');
     if (result.status === 'PREVIEW') releaseResult(`预览通过\n项目：${result.plan.project}\n提交：${result.plan.commit}\n步骤：${result.plan.stages.join(' → ')}\n未执行服务器操作。`, 'success');
