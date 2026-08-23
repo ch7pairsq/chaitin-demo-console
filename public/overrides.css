@@ -1,0 +1,32 @@
+.command-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.release-card {
+  border-left: 3px solid var(--cyan) !important;
+}
+
+#release-commit-group[hidden] {
+  display: none !important;
+}
+
+dialog.release-dialog {
+  width: min(1200px, calc(100% - 32px));
+}
+
+@media (max-width: 1100px) {
+  .command-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .command-strip {
+    grid-template-columns: 1fr;
+  }
+
+  dialog.release-dialog {
+    width: calc(100% - 16px);
+    padding: 14px;
+  }
+}

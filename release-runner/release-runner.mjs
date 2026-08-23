@@ -28,8 +28,9 @@ async function readBody(request) {
   return raw ? JSON.parse(raw) : {};
 }
 function validRequest(body) {
+  const revision = body?.revision ?? body?.commit;
   return ['security-triage-agent', 'malware-triage-agent'].includes(body?.project)
-    && typeof body.commit === 'string' && /^[a-f0-9]{40}$/i.test(body.commit);
+    && typeof revision === 'string' && (revision === 'main' || /^[a-f0-9]{40}$/i.test(revision));
 }
 
 createServer(async (request, response) => {
@@ -42,8 +43,11 @@ createServer(async (request, response) => {
     if (!validRequest(body)) return respond(response, 400, { error: 'invalid_release_request' });
     inFlight = true;
     const releaseId = `release-${randomUUID()}`;
-    await execFileAsync('/usr/local/bin/release-agent-project.sh', [body.project, body.commit.toLowerCase()], { timeout: 180_000, maxBuffer: 8_192 });
-    return respond(response, 200, { releaseId, project: body.project, commit: body.commit.toLowerCase(), health: 'passed' });
+    const revision = body.revision ?? body.commit;
+    const { stdout } = await execFileAsync('/usr/local/bin/release-agent-project.sh', [body.project, revision.toLowerCase()], { timeout: 180_000, maxBuffer: 8_192 });
+    const commit = stdout.trim();
+    if (!/^[a-f0-9]{40}$/i.test(commit)) throw new Error('invalid_resolved_commit');
+    return respond(response, 200, { releaseId, project: body.project, commit, health: 'passed' });
   } catch {
     return respond(response, 502, { error: 'release_failed' });
   } finally { inFlight = false; }

@@ -121,16 +121,17 @@ function releaseMode() {
 }
 async function requestRelease(execute) {
   const project = $('#release-project').value;
+  const target = $('#release-target').value;
   const commit = $('#release-commit').value.trim();
   const confirmation = $('#release-confirmation').value;
-  if (!/^[a-f0-9]{40}$/i.test(commit)) { releaseResult('请输入已推送到 main 的 40 位 Git commit SHA。', 'error'); return; }
+  if (target === 'commit' && !/^[a-f0-9]{40}$/i.test(commit)) { releaseResult('指定 commit 时，请输入已推送到 main 的 40 位 Git commit SHA。', 'error'); return; }
   if (execute && !confirmation) { releaseResult('真实发布需要管理员在浏览器中临时输入确认码；该值不会保存。', 'error'); return; }
   const button = execute ? $('#release-trigger') : $('#release-preview'); const prior = button.textContent; button.disabled = true; button.textContent = '处理中…';
   try {
-    const response = await fetch('/api/release', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project, commit, execute, confirmation: execute ? confirmation : undefined }) });
+    const response = await fetch('/api/release', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project, target, ...(target === 'commit' ? { commit } : {}), execute, confirmation: execute ? confirmation : undefined }) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'release_failed');
-    if (result.status === 'PREVIEW') releaseResult(`预览通过\n项目：${result.plan.project}\n提交：${result.plan.commit}\n步骤：${result.plan.stages.join(' → ')}\n未执行服务器操作。`, 'success');
+    if (result.status === 'PREVIEW') releaseResult(`预览通过\n项目：${result.plan.project}\n版本：${result.plan.commit}\n步骤：${result.plan.stages.join(' → ')}\n未执行服务器操作。`, 'success');
     else releaseResult(`发布完成\n项目：${result.result.project}\n提交：${result.result.commit}\n健康验证：${result.result.health}\nrelease_id：${result.result.releaseId}`, 'success');
   } catch (error) { releaseResult(`发布请求未完成：${error.message}\n不会自动重试，避免重复发布。请在 Portainer 查看 release-runner 日志。`, 'error'); }
   finally { button.disabled = false; button.textContent = prior; }
@@ -168,6 +169,7 @@ async function boot() {
   $('#copy-log-query').addEventListener('click', () => state.current ? copyText(`trace_id=\"${state.current.traceId}\"`, $('#copy-log-query')) : alert('请先发送一个案例。'));
   $('#release-preview').addEventListener('click', () => requestRelease(false));
   $('#release-trigger').addEventListener('click', () => requestRelease(true));
+  $('#release-target').addEventListener('change', () => { const advanced = $('#release-target').value === 'commit'; $('#release-commit-group').hidden = !advanced; if (!advanced) $('#release-commit').value = ''; });
   $('#prompt').addEventListener('input', (event) => { if (event.target.value !== state.preparedText) clearPrepared(); });
   $('#chat-form').addEventListener('submit', async (event) => { event.preventDefault(); const input = $('#prompt'); const message = input.value.trim(); if (!message) return; const id = message === state.preparedText && state.preparedCaseId ? state.preparedCaseId : caseForMessage(message); input.value = ''; clearPrepared(); try { await replay(id, message); } catch { appendMessage('bot', '回放服务失败，请检查 demo-console 容器日志。'); } });
 }

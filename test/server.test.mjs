@@ -46,6 +46,12 @@ test('release endpoint is strict and defaults to a non-mutating preview', async 
   const preview = await fetch(`${base}/api/release`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project: 'security-triage-agent', commit: 'a'.repeat(40) }) });
   assert.equal(preview.status, 200);
   assert.equal((await preview.json()).status, 'PREVIEW');
+  const latestMain = await fetch(`${base}/api/release`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project: 'malware-triage-agent', target: 'main' }) });
+  const latestMainBody = await latestMain.json();
+  assert.equal(latestMain.status, 200);
+  assert.equal(latestMainBody.status, 'PREVIEW');
+  assert.equal(latestMainBody.plan.target, 'remote_main_latest');
+  assert.match(latestMainBody.plan.commit, /完整 SHA-1/);
 }));
 
 test('release preview never calls a runner even when formal release is enabled', async () => {

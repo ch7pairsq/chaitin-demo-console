@@ -50,14 +50,17 @@ function releaseSettings() {
 }
 function releaseRequest(body) {
   const project = body?.project;
+  const target = body?.target ?? 'commit';
   const commit = body?.commit;
   const confirmation = body?.confirmation;
   const execute = body?.execute;
   if (!['security-triage-agent', 'malware-triage-agent'].includes(project)) return null;
-  if (typeof commit !== 'string' || !/^[a-f0-9]{40}$/i.test(commit)) return null;
+  if (!['main', 'commit'].includes(target)) return null;
+  if (target === 'commit' && (typeof commit !== 'string' || !/^[a-f0-9]{40}$/i.test(commit))) return null;
+  if (target === 'main' && commit !== undefined) return null;
   if (confirmation !== undefined && (typeof confirmation !== 'string' || confirmation.length > 128)) return null;
   if (execute !== undefined && typeof execute !== 'boolean') return null;
-  return { project, commit: commit.toLowerCase(), confirmation: confirmation ?? '', execute: execute === true };
+  return { project, target, commit: target === 'main' ? 'main' : commit.toLowerCase(), confirmation: confirmation ?? '', execute: execute === true };
 }
 function sameSecret(a, b) {
   if (!a || !b) return false;
@@ -65,7 +68,14 @@ function sameSecret(a, b) {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 function releasePlan(request) {
-  return { project: request.project, commit: request.commit, stages: ['fetch_commit', 'pin_workspace_revision', 'agent_compose_up', 'project_and_capset_health_check'], policy: '仅允许固定项目与 40 位已推送 commit；不读取或返回 token、私钥、样本、IOC。' };
+  const latestMain = request.target === 'main';
+  return {
+    project: request.project,
+    target: latestMain ? 'remote_main_latest' : 'specified_commit',
+    commit: latestMain ? '将在发布器内解析为完整 SHA-1' : request.commit,
+    stages: latestMain ? ['fetch_remote_main', 'resolve_immutable_commit', 'pin_workspace_revision', 'agent_compose_up', 'project_and_capset_health_check'] : ['fetch_commit', 'pin_workspace_revision', 'agent_compose_up', 'project_and_capset_health_check'],
+    policy: '页面可选择远程 main 最新提交；发布器内仍固定为完整 commit，不读取或返回 token、私钥、样本、IOC。'
+  };
 }
 async function bodyOf(request) {
   let body = '';
@@ -107,7 +117,7 @@ export function createDemoServer() {
         releaseInFlight = true;
         try {
           const abort = new AbortController(); const timer = setTimeout(() => abort.abort(), 190_000);
-          const upstream = await fetch(`${settings.gatewayUrl}/release`, { method: 'POST', signal: abort.signal, headers: { authorization: `Bearer ${settings.runnerToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ project: payload.project, commit: payload.commit }) });
+          const upstream = await fetch(`${settings.gatewayUrl}/release`, { method: 'POST', signal: abort.signal, headers: { authorization: `Bearer ${settings.runnerToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ project: payload.project, revision: payload.commit }) });
           clearTimeout(timer);
           if (!upstream.ok) return json(response, 502, { error: 'release_runner_failed' });
           const result = await upstream.json();

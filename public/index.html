@@ -4,13 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chaitin · Agent 回放控制台</title>
   <link rel="stylesheet" href="/styles.css">
-  <style>
-    .command-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .release-card { border-left: 3px solid var(--cyan) !important; }
-    dialog.release-dialog { width: min(1200px, calc(100% - 32px)); }
-    @media (max-width: 1100px) { .command-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    @media (max-width: 640px) { .command-strip { grid-template-columns: 1fr; } dialog.release-dialog { width: calc(100% - 16px); padding: 14px; } }
-  </style>
+  <link rel="stylesheet" href="/overrides.css">
 </head>
 <body>
   <main class="shell">
@@ -47,7 +41,7 @@
   </main>
   <dialog id="metric-dialog"><form method="dialog"><button class="dialog-close" aria-label="关闭">×</button></form><p class="eyebrow">METRIC DRILLDOWN</p><h2 id="metric-dialog-title"></h2><dl id="metric-dialog-body"></dl></dialog>
   <dialog id="guide-dialog" class="guide-dialog"><form method="dialog"><button class="dialog-close" aria-label="关闭">×</button></form><section class="operations-lede"><p class="eyebrow">SAFE INITIALIZATION RUNBOOK</p><h3>从登录服务器到回放验收</h3><p>配置与服务控制统一在 Portainer Stack 中完成；令牌、API Key 与私钥只进入服务器的 Secret/环境注入，不贴进仓库、页面或聊天框。</p></section><div id="runbook" class="runbook"></div><section class="acceptance"><b>验收标准</b><span>服务重启自动恢复 · 仅本机端口发布 · Agent 不直连 · 审计可用 trace_id 回放 · 异常可降级到人工</span></section></dialog>
-  <dialog id="release-dialog" class="release-dialog"><form method="dialog"><button class="dialog-close" aria-label="关闭">×</button></form><section class="release-board"><div class="release-head"><div><p class="eyebrow">CONTROLLED AGENT RELEASE</p><h3>指定提交发布</h3><p>发布器只允许两个已登记项目与已推送的 40 位 commit；每次都会固定 revision、更新 agent-compose，并做无样本健康检查。</p></div><span id="release-mode" class="release-mode">加载中</span></div><div class="release-form"><label>目标 Agent<select id="release-project"><option value="security-triage-agent">security-triage-agent</option><option value="malware-triage-agent">malware-triage-agent</option></select></label><label>Git commit<input id="release-commit" maxlength="40" autocomplete="off" placeholder="输入已推送的 40 位 commit SHA"></label><label>发布确认码<input id="release-confirmation" type="password" maxlength="128" autocomplete="off" placeholder="仅真实发布模式需要；不保存"></label></div><div class="release-actions"><button id="release-preview" class="ghost-button">预览发布计划</button><button id="release-trigger" class="release-button">确认发布并健康验证</button></div><div id="release-result" class="release-result">输入目标项目与已推送的 commit。默认是预览模式，不会执行服务器操作。</div><div class="release-boundary"><b>发布边界</b><span>浏览器不持有 runner token；发布器无公网端口；不会读取样本、私钥、IOC 或模型 Key；并发发布会被拒绝。</span></div></section></dialog>
+  <dialog id="release-dialog" class="release-dialog"><form method="dialog"><button class="dialog-close" aria-label="关闭">×</button></form><section class="release-board"><div class="release-head"><div><p class="eyebrow">CONTROLLED AGENT RELEASE</p><h3>受控版本发布</h3><p>默认选择远程 main 的最新已推送版本；发布器会在服务器内解析并固定完整 commit，再更新 agent-compose 并做无样本健康检查。</p></div><span id="release-mode" class="release-mode">加载中</span></div><div class="release-form"><label>目标 Agent<select id="release-project"><option value="security-triage-agent">security-triage-agent</option><option value="malware-triage-agent">malware-triage-agent</option></select></label><label>发布版本<select id="release-target"><option value="main">远程 main 最新提交（推荐）</option><option value="commit">指定 commit（高级 / 回滚）</option></select></label><label id="release-commit-group" hidden>Git commit<input id="release-commit" maxlength="40" autocomplete="off" placeholder="输入已推送的 40 位 commit SHA"></label><label>发布确认码<input id="release-confirmation" type="password" maxlength="128" autocomplete="off" placeholder="仅真实发布模式需要；不保存"></label></div><div class="release-actions"><button id="release-preview" class="ghost-button">预览发布计划</button><button id="release-trigger" class="release-button">确认发布并健康验证</button></div><div id="release-result" class="release-result">默认使用远程 main 最新提交；预览模式不会执行服务器操作。</div><div class="release-boundary"><b>发布边界</b><span>浏览器不持有 runner token；发布器无公网端口；不会读取样本、私钥、IOC 或模型 Key；并发发布会被拒绝。</span></div></section></dialog>
   <script type="module" src="/app.js"></script>
 </body>
 </html>

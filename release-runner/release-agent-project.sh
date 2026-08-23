@@ -4,10 +4,8 @@
 set -eu
 
 project="${1:?project required}"
-commit="${2:?commit required}"
+revision="${2:?revision required}"
 case "$project" in security-triage-agent|malware-triage-agent) ;; *) exit 64 ;; esac
-test "${#commit}" -eq 40
-case "$commit" in *[!0123456789abcdef]*) exit 64 ;; esac
 
 release_dir="/deploy/${project}"
 manifest="${release_dir}/agent-compose.yml"
@@ -23,6 +21,13 @@ test -d "$release_dir" && test -f "$manifest" && test -f "$release_dir/.env"
 test "$(stat -c '%a' "$release_dir/.env")" = "600"
 
 git -C "$release_dir" fetch --quiet origin main
+if [ "$revision" = "main" ]; then
+  commit="$(git -C "$release_dir" rev-parse --verify origin/main)"
+else
+  commit="$revision"
+  test "${#commit}" -eq 40
+  case "$commit" in *[!0123456789abcdef]*) exit 64 ;; esac
+fi
 git -C "$release_dir" cat-file -e "${commit}^{commit}"
 git -C "$release_dir" merge-base --is-ancestor "$commit" origin/main
 
@@ -44,3 +49,6 @@ if [ "$project" = "malware-triage-agent" ]; then
 else
   docker exec agent-compose agent-compose -p "$project" run "$agent" --rm --command 'cd agent && node --check src/cli.js' >/dev/null
 fi
+
+# The runner returns only the immutable commit that it actually pinned.
+printf '%s\n' "$commit"
