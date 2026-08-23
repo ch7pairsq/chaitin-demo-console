@@ -46,7 +46,7 @@ ghcr.io/ch7pairsq/chaitin-demo-console:sha-<commit>
 
 ## Portainer 部署
 
-将 [deploy/portainer-service.yml](deploy/portainer-service.yml) 中的 `demo-console` 与 `release-runner` 合并到现有 `chaitin` Stack；不要把它部署为第二个 Stack。控制台只从 GHCR 拉取已发布镜像，端口固定为 `127.0.0.1:7411`，不挂载 Docker socket、知识库、状态卷或任何密钥。发布器无宿主机端口，是唯一具有 Docker socket 的最小特权组件。
+将 [deploy/portainer-service.yml](deploy/portainer-service.yml) 中的 `demo-console` 与 `release-runner` 合并到现有 `chaitin` Stack；不要把它部署为第二个 Stack。若需要直接整体替换 Stack 内容，使用完整清单 [deploy/chaitin-stack.yml](deploy/chaitin-stack.yml)。控制台只从 GHCR 拉取已发布镜像，端口固定为 `127.0.0.1:7411`，不挂载 Docker socket、知识库、状态卷或任何密钥。发布器无宿主机端口，是唯一具有 Docker socket 的最小特权组件。
 
 在 Stack 的非敏感环境变量中选填 `PORTAINER_URL=https://<portainer-host>:9443`，以启用页面顶部的 Portainer 按钮。不要在这个变量或任何页面字段填写用户名、密码、token、私钥或 API Key。
 
