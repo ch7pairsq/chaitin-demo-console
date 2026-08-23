@@ -4,6 +4,13 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chaitin · Agent 回放控制台</title>
   <link rel="stylesheet" href="/styles.css">
+  <style>
+    .command-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .release-card { border-left: 3px solid var(--cyan) !important; }
+    dialog.release-dialog { width: min(1200px, calc(100% - 32px)); }
+    @media (max-width: 1100px) { .command-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 640px) { .command-strip { grid-template-columns: 1fr; } dialog.release-dialog { width: calc(100% - 16px); padding: 14px; } }
+  </style>
 </head>
 <body>
   <main class="shell">
@@ -14,6 +21,7 @@
     <section class="command-strip" aria-label="部署与边界概览">
       <div class="portainer-card"><span class="card-kicker">INFRASTRUCTURE CONTROL</span><b>Portainer Stack</b><small>统一管理启动、重启、镜像更新与日志</small><button id="open-portainer" class="portainer-button">打开 Portainer ↗</button></div>
       <div class="guide-card"><span class="card-kicker">REPLAY WALKTHROUGH</span><b>初始化与验证指引</b><small>按步骤准备环境，再用本页面验证完整链路</small><button class="ghost-button" data-dialog-target="guide-dialog">查看指引 ↗</button></div>
+      <div class="release-card"><span class="card-kicker">CONTROLLED RELEASE</span><b>Agent 发布中心</b><small>锁定已推送的代码版本，先预览发布计划，再由管理员确认执行</small><button class="ghost-button" data-dialog-target="release-dialog">打开发布中心 ↗</button></div>
     </section>
     <section class="workspace">
       <aside class="chat-pane">
@@ -27,19 +35,19 @@
         <div class="trace-head"><div><p class="eyebrow">TRACE WORKBENCH</p><h2 id="trace-title">等待任务</h2><div class="trace-token"><span>trace_id</span><code id="trace-id">—</code><button id="copy-trace" disabled title="复制 trace_id">复制</button></div></div><div class="run-tags"><span id="verification" class="verification">未运行</span><span id="outcome" class="outcome neutral">未运行</span></div></div>
         <div id="trace-summary" class="trace-summary"><span>发送任务后，在同一条 trace_id 下展示状态、能力调用、模型解释与审计证据。</span></div>
         <section class="octobus-path" aria-label="OctoBus 三层能力链路"><div class="path-label"><b>OctoBus 授权路径</b><small>每次能力调用均绑定当前 trace_id</small></div><div class="path-nodes"><div class="path-node"><span>01</span><small>SERVICE</small><b id="path-service">等待任务</b></div><i>→</i><div class="path-node"><span>02</span><small>INSTANCE</small><b id="path-instance">等待任务</b></div><i>→</i><div class="path-node capset"><span>03</span><small>CAPSET</small><b id="path-capset">等待任务</b></div></div><div class="path-proof"><span id="path-protocol">Connect RPC · 无 Agent 直连</span><span id="path-principal">最小权限令牌仅服务端可见</span></div></section>
-        <nav class="tabs"><button class="active" data-tab="chain">全链路</button><button data-tab="model">大模型解释</button><button data-tab="audit">能力审计</button><button data-tab="logs">结构化日志</button><button data-tab="metrics">指标</button><button data-tab="release">发布中心</button></nav>
+        <nav class="tabs"><button class="active" data-tab="chain">全链路</button><button data-tab="model">大模型解释</button><button data-tab="audit">能力审计</button><button data-tab="logs">结构化日志</button><button data-tab="metrics">指标</button></nav>
         <div class="panel active" id="chain"><div class="legend"><span><i class="legend-normal"></i>正常步骤</span><span><i class="legend-exception"></i>异常 / 降级</span><span><i class="legend-multiturn"></i>多轮状态</span><span><i class="legend-boundary"></i>安全边界</span></div><div id="timeline" class="timeline"><p class="empty">状态机、RAG、OctoBus 与人工复核将在此按 trace_id 串联。</p></div></div>
         <div class="panel" id="model"><section class="model-board"><div class="model-head"><div><p class="eyebrow">MODEL RESPONSE / BOUNDED ROLE</p><h3 id="model-status">等待任务</h3></div><span id="model-provider" class="model-provider">—</span></div><div class="model-rule"><b>输入保护</b><span id="model-policy">只有经过 allow-list 的脱敏字段才可进入模型上下文。</span></div><div class="model-response"><small>受限模型输出</small><pre id="model-output">未调用模型。</pre></div><div class="model-meta"><div><small>引用来源</small><p id="model-citations">—</p></div><div><small>最后防线</small><p id="model-guardrail">模型不会拥有工具令牌，也无法改变处置决策。</p></div></div></section></div>
         <div class="panel" id="audit"><div class="toolbar"><div><b>能力调用审计</b><small>授权主体、service → instance → capset、幂等策略和结果摘要均以 trace_id 关联</small></div><button id="audit-focus" class="ghost-button">定位当前 trace</button></div><div id="audit-empty" class="audit-empty">等待任务。此区域将显示每一次经 OctoBus 授权的能力调用。</div><div id="audit-cards" class="audit-cards"></div></div>
         <div class="panel" id="logs"><div class="toolbar"><div><b>结构化日志</b><small>每行包含同一 trace_id 下的状态和安全控制；展示不含敏感正文</small></div><button id="copy-log-query" class="ghost-button">复制查询提示</button></div><div class="table-wrap"><table><thead><tr><th>时间</th><th>级别</th><th>状态</th><th>事件</th><th>控制措施</th></tr></thead><tbody id="log-view"><tr><td colspan="5" class="empty-cell">暂无日志</td></tr></tbody></table></div></div>
         <div class="panel" id="metrics"><div class="toolbar"><div><b>演示指标</b><small>点击指标卡下钻计算口径与当前值</small></div></div><div id="metric-grid" class="metric-grid"></div><p class="hint">指标来自当前浏览器会话与 `/metrics` 的计数；不是生产监控，且不保存样本或敏感审计正文。</p></div>
-        <div class="panel" id="release"><section class="release-board"><div class="release-head"><div><p class="eyebrow">CONTROLLED AGENT RELEASE</p><h3>指定提交发布</h3><p>发布器只允许两个已登记项目与已推送的 40 位 commit；每次都会固定 revision、更新 agent-compose，并做无样本健康检查。</p></div><span id="release-mode" class="release-mode">加载中</span></div><div class="release-form"><label>目标 Agent<select id="release-project"><option value="security-triage-agent">security-triage-agent</option><option value="malware-triage-agent">malware-triage-agent</option></select></label><label>Git commit<input id="release-commit" maxlength="40" autocomplete="off" placeholder="输入已推送的 40 位 commit SHA"></label><label>发布确认码<input id="release-confirmation" type="password" maxlength="128" autocomplete="off" placeholder="仅真实发布模式需要；不保存"></label></div><div class="release-actions"><button id="release-preview" class="ghost-button">预览发布计划</button><button id="release-trigger" class="release-button">确认发布并健康验证</button></div><div id="release-result" class="release-result">输入目标项目与已推送的 commit。默认是预览模式，不会执行服务器操作。</div><div class="release-boundary"><b>发布边界</b><span>浏览器不持有 runner token；发布器无公网端口；不会读取样本、私钥、IOC 或模型 Key；并发发布会被拒绝。</span></div></section></div>
       </section>
     </section>
     <footer>稳定、脱敏的安全回放。真实 Agent 只能经 OctoBus Connect RPC 调用能力；此页面不持有模型密钥、Capset token、IOC 或原始样本。</footer>
   </main>
   <dialog id="metric-dialog"><form method="dialog"><button class="dialog-close" aria-label="关闭">×</button></form><p class="eyebrow">METRIC DRILLDOWN</p><h2 id="metric-dialog-title"></h2><dl id="metric-dialog-body"></dl></dialog>
   <dialog id="guide-dialog" class="guide-dialog"><form method="dialog"><button class="dialog-close" aria-label="关闭">×</button></form><section class="operations-lede"><p class="eyebrow">SAFE INITIALIZATION RUNBOOK</p><h3>从登录服务器到回放验收</h3><p>配置与服务控制统一在 Portainer Stack 中完成；令牌、API Key 与私钥只进入服务器的 Secret/环境注入，不贴进仓库、页面或聊天框。</p></section><div id="runbook" class="runbook"></div><section class="acceptance"><b>验收标准</b><span>服务重启自动恢复 · 仅本机端口发布 · Agent 不直连 · 审计可用 trace_id 回放 · 异常可降级到人工</span></section></dialog>
+  <dialog id="release-dialog" class="release-dialog"><form method="dialog"><button class="dialog-close" aria-label="关闭">×</button></form><section class="release-board"><div class="release-head"><div><p class="eyebrow">CONTROLLED AGENT RELEASE</p><h3>指定提交发布</h3><p>发布器只允许两个已登记项目与已推送的 40 位 commit；每次都会固定 revision、更新 agent-compose，并做无样本健康检查。</p></div><span id="release-mode" class="release-mode">加载中</span></div><div class="release-form"><label>目标 Agent<select id="release-project"><option value="security-triage-agent">security-triage-agent</option><option value="malware-triage-agent">malware-triage-agent</option></select></label><label>Git commit<input id="release-commit" maxlength="40" autocomplete="off" placeholder="输入已推送的 40 位 commit SHA"></label><label>发布确认码<input id="release-confirmation" type="password" maxlength="128" autocomplete="off" placeholder="仅真实发布模式需要；不保存"></label></div><div class="release-actions"><button id="release-preview" class="ghost-button">预览发布计划</button><button id="release-trigger" class="release-button">确认发布并健康验证</button></div><div id="release-result" class="release-result">输入目标项目与已推送的 commit。默认是预览模式，不会执行服务器操作。</div><div class="release-boundary"><b>发布边界</b><span>浏览器不持有 runner token；发布器无公网端口；不会读取样本、私钥、IOC 或模型 Key；并发发布会被拒绝。</span></div></section></dialog>
   <script type="module" src="/app.js"></script>
 </body>
 </html>
