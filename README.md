@@ -38,6 +38,8 @@ docker run --rm -p 127.0.0.1:7411:7411 chaitin-demo-console:local
 
 服务器登录、Secret 注入、Stack 更新及重启验收不在演示界面中执行。请使用 [8 步命令行运维与验收手册](docs/operations-command-runbook.md)；其中所有命令避免输出密钥、私有 IOC 或样本正文。
 
+开发联调中遇到的配置、模型、沙箱、权限、审计与降级问题及处理结论见[开发联调问题摘要](docs/development-debugging-retrospective.md)。
+
 ## 镜像发布
 
 推送 `main` 会由 GitHub Actions 运行语法检查、测试并发布：
