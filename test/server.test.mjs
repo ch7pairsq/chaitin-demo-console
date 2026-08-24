@@ -20,6 +20,11 @@ test('serves replay cases without sample material and exposes metrics', async ()
   assert.deepEqual(result.octobus, { service: 'malware-analysis-service', instance: 'malware-analysis-demo', capset: 'malware-analysis' });
   assert.equal(result.audit[0].traceId, result.traceId);
   assert.equal(result.llm.status, 'OK · schema validated');
+  assert.equal(result.knowledgeProof.provenance.ruleId, 'local-rag / candidate-yara gate');
+  assert.match(result.knowledgeProof.ablation.verdict, /RAG/);
+  const privateEvidence = await fetch(`${base}/api/replay`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ caseId: 'security-ioc' }) }).then((response) => response.json());
+  assert.equal(privateEvidence.knowledgeProof.provenance.ruleId, 'threat-evidence / APT_IP');
+  assert.equal(JSON.stringify(privateEvidence.knowledgeProof).includes('203.0.113.77'), false);
   const metrics = await fetch(`${base}/metrics`).then((response) => response.text());
   assert.match(metrics, /chaitin_demo_replay_total\{domain="malware"\} 1/);
 }));

@@ -14,6 +14,56 @@ const securityBase = [
 ];
 
 function trace(domain, id) { return `demo-${domain}-20260822-${id}`; }
+function knowledgeProof({ id, domain }) {
+  if (id === 'security-ioc') return {
+    provenance: {
+      ruleId: 'threat-evidence / APT_IP', version: 'security-decision-evidence · 私有受控版',
+      source: '脱敏威胁证据登记；页面只保留 evidence_id 与来源类型。',
+      decision: '命中后固定升级人工案件；不自动封禁，也不把 IOC 交给模型。',
+      failureMode: 'IOC 过期、资产上下文不足或命中无法解释时，不执行自动动作。',
+      review: '人工确认资产、时间线与关联证据后再处置。'
+    },
+    ablation: {
+      input: '同一条脱敏告警上下文；网络指示符不在页面展示。',
+      withKnowledge: ['私有证据关联器命中 1 条受控条目', '输出：ESCALATE / open_case', '引用：evidence_id + source_type（无 IOC 正文）'],
+      withoutKnowledge: ['移除同一 evidence_id 对应条目，关联结果为 0', '输出：回到确定性误报规则或人工复核路径', '禁止把“未命中”解释为安全或自动封禁'],
+      verdict: '输出状态和处置路径发生可解释变化，证明私有威胁证据实际参与判定；生产环境不得删除知识后继续依赖原结论。',
+      testRef: 'security-triage-agent/tests/triage-agent.test.js · private evidence ablation'
+    }
+  };
+  if (domain === 'security') return {
+    provenance: {
+      ruleId: 'fp_dns_001', version: 'false-positive-rules.json · v1',
+      source: '个人实验 / 脱敏回溯记录；规则正文中标注 provenance，原工单不出受控环境。',
+      decision: '仅“登记扫描资产 + 授权窗口 + DNS 端口 + 告警时间”齐全时，建议 suppress_with_review。',
+      failureMode: '扫描资产未登记、窗口不一致或端口不符会造成误抑制风险。',
+      review: '任一必需证据缺失即 request_missing_evidence；建议结果仍须人工复核。'
+    },
+    ablation: {
+      input: '同一告警 A-1001 的脱敏上下文；只移除“授权扫描窗口”这一条证明。',
+      withKnowledge: ['规则与 4 项证据均可用', '输出：NEEDS_REVIEW / suppress_with_review', '规则 ID：fp_dns_001'],
+      withoutKnowledge: ['授权窗口证明缺失，规则不得默认匹配', '输出：MANUAL_REVIEW / request_missing_evidence', '不允许模型补全缺失事实'],
+      verdict: '删除关键知识证明后，自动降噪建议消失并转人工；这不是词典映射，而是可执行的证据门槛。',
+      testRef: 'security-triage-agent/tests/triage-agent.test.js · rule evidence ablation'
+    }
+  };
+  return {
+    provenance: {
+      ruleId: 'local-rag / candidate-yara gate', version: 'malware-rule-evidence · 私有受控版',
+      source: '离线样本登记册与脱敏报告证据；只读挂载，禁止原始样本、路径、二进制和密钥字段。',
+      decision: 'RAG 只提供 citation_id 与证据摘要；YARA 至少需要两项稳定指标且必须人工审核。',
+      failureMode: '低分、空语料、语料解析失败或确定性证据不足，均不允许模型补写结论。',
+      review: '低分输出 REFUSE_INSUFFICIENT_EVIDENCE；候选规则始终 autoPublish=false。'
+    },
+    ablation: {
+      input: '同一份无足够确定性特征的脱敏报告；只切换本地 RAG 语料是否提供受控引用。',
+      withKnowledge: ['本地检索命中允许的 citation_id', '输出：进入人工研判，候选规则仍需验证', '模型仅解释引用，不能决定发布'],
+      withoutKnowledge: ['空语料或 topScore 低于阈值', '输出：REFUSE_INSUFFICIENT_EVIDENCE', '不生成研判结论或 YARA'],
+      verdict: '仅移除私有证据后，流程由“可人工研判”变为“拒答”；证明 RAG 不是装饰性 Prompt。',
+      testRef: 'malware-triage-agent/agent/test/malware-triage-agent.test.js · RAG ablation'
+    }
+  };
+}
 function buildCase({ id, domain, title, user, outcome, reply, steps, severity = 'medium', verification = 'replay' }) {
   const traceId = trace(domain, id);
   const octobus = domain === 'security'
@@ -57,7 +107,7 @@ function buildCase({ id, domain, title, user, outcome, reply, steps, severity = 
   } : {
     provider: '未调用模型', model: '—', requestPolicy: '该路径在状态机入口拒绝、收集槽位或调用失败；模型未参与。', response: '无模型输出。', status: 'NOT INVOKED', citations: [], guardrail: '避免将闲聊、缺槽位或工具故障的输入无条件发送给 LLM。'
   };
-  return { id, domain, title, user, traceId, outcome, severity, verification, reply, octobus, llm, steps: fullSteps, logs, audit };
+  return { id, domain, title, user, traceId, outcome, severity, verification, reply, octobus, llm, knowledgeProof: knowledgeProof({ id, domain }), steps: fullSteps, logs, audit };
 }
 
 export const demoCases = [

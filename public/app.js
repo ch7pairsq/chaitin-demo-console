@@ -89,6 +89,28 @@ function renderModel(model) {
   $('#model-status').textContent = model.status; $('#model-provider').textContent = model.provider; $('#model-policy').textContent = model.requestPolicy; $('#model-output').textContent = model.response;
   $('#model-citations').textContent = model.citations.length ? model.citations.join('  ·  ') : '无引用；模型未被调用。'; $('#model-guardrail').textContent = model.guardrail;
 }
+function proofFact(name, value) {
+  const row = document.createElement('div'); row.append(textNode('dt', name), textNode('dd', value)); return row;
+}
+function proofList(values, tone) {
+  const list = document.createElement('ul'); list.className = tone;
+  for (const value of values) list.append(textNode('li', value));
+  return list;
+}
+function renderKnowledgeProof(proof) {
+  const provenance = $('#provenance-view'); const ablation = $('#ablation-view'); clear(provenance); clear(ablation);
+  if (!proof) { provenance.append(textNode('p', '当前案例没有知识证明记录。', 'empty')); ablation.append(textNode('p', '当前案例没有知识消融对照。', 'empty')); return; }
+  const provenanceCard = document.createElement('article'); provenanceCard.className = 'provenance-card';
+  provenanceCard.append(textNode('code', proof.provenance.ruleId), textNode('p', proof.provenance.source, 'proof-source'));
+  const facts = document.createElement('dl');
+  facts.append(proofFact('版本', proof.provenance.version), proofFact('可执行判定', proof.provenance.decision), proofFact('已知失效 / 误判边界', proof.provenance.failureMode), proofFact('人工复核条件', proof.provenance.review));
+  provenanceCard.append(facts); provenance.append(provenanceCard);
+  const input = document.createElement('article'); input.className = 'ablation-input'; input.append(textNode('small', '固定输入'), textNode('p', proof.ablation.input)); ablation.append(input);
+  for (const [title, items, tone] of [['启用受控知识', proof.ablation.withKnowledge, 'with-knowledge'], ['移除对应知识', proof.ablation.withoutKnowledge, 'without-knowledge']]) {
+    const card = document.createElement('article'); card.className = `ablation-card ${tone}`; card.append(textNode('b', title), proofList(items, tone)); ablation.append(card);
+  }
+  const verdict = $('#ablation-verdict'); verdict.replaceChildren(textNode('b', '回放结论：'), textNode('span', proof.ablation.verdict), textNode('code', proof.ablation.testRef));
+}
 function renderAudit(audit) {
   const board = $('#audit-cards'); clear(board); $('#audit-empty').hidden = audit.length > 0;
   for (const row of audit) {
@@ -152,7 +174,7 @@ async function render(result, run) {
   const outcome = $('#outcome'); outcome.textContent = label(result.outcome); outcome.className = `outcome ${outcomeTone(result.outcome)}`;
   const verification = $('#verification'); verification.textContent = result.verification === 'server-validated' ? '服务器联调已通过' : '稳定回放'; verification.className = `verification ${result.verification}`;
   $('#trace-summary').replaceChildren(textNode('span', `${result.domain === 'security' ? '安全运营 Agent' : '恶意样本 Agent'} · ${result.reply}`));
-  renderOctoBus(result); renderModel(result.llm); renderAudit(result.audit); renderTable('#log-view', result.logs, ['timestamp', 'level', 'state', 'message', 'decision'], '暂无日志');
+  renderOctoBus(result); renderModel(result.llm); renderKnowledgeProof(result.knowledgeProof); renderAudit(result.audit); renderTable('#log-view', result.logs, ['timestamp', 'level', 'state', 'message', 'decision'], '暂无日志');
   state.metrics.total += 1; state.metrics[result.domain] += 1; if (!['HUMAN_REVIEW_REQUIRED', 'COMPLETED', 'NEEDS_REVIEW', 'ESCALATE'].includes(result.outcome)) state.metrics.nonSuccess += 1; renderMetrics(); await renderTimeline(result, run);
 }
 async function replay(id, userText) { const response = await fetch('/api/replay', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ caseId: id }) }); if (!response.ok) throw new Error('replay_failed'); const result = await response.json(); appendMessage('user', userText); appendMessage('bot', result.reply); const run = ++state.run; await render(result, run); }
