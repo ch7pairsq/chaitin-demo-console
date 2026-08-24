@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createDemoServer } from '../server.mjs';
 
 async function withServer(run) {
@@ -44,6 +45,14 @@ test('does not expose a live backend bridge by default', async () => withServer(
   assert.equal(response.status, 501);
   assert.equal((await response.json()).error, 'live_mode_not_enabled');
 }));
+
+test('keeps knowledge proof in the top-level dialog instead of the trace tabs', () => {
+  const page = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(page, /data-dialog-target="proof-dialog"/);
+  assert.match(page, /id="proof-dialog"/);
+  assert.doesNotMatch(page, /data-tab="proof"/);
+  assert.doesNotMatch(page, /id="guide-dialog"/);
+});
 
 test('release endpoint is strict and defaults to a non-mutating preview', async () => withServer(async (base) => {
   const invalid = await fetch(`${base}/api/release`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project: 'anything', commit: 'x' }) });

@@ -6,17 +6,6 @@ const textNode = (tag, value, className) => { const node = document.createElemen
 const clear = (node) => node.replaceChildren();
 const caseById = (id) => state.cases.find((item) => item.id === id);
 
-const runbook = [
-  ['01', '登录与主机检查', '在受控终端使用本地私钥登录服务器；私钥文件始终留在本机，不复制到服务器、仓库或页面。', 'ssh -i <local-key-path> root@<server-ip>', '确认 Docker、磁盘空间和时间同步正常。'],
-  ['02', '配置 Server Secret', '在 Portainer 的 Stack 环境变量/Secret 中配置 DeepSeek Key、两个独立 OctoBus token 与端点；只填写值，不在 Compose 或 Git 中写死。', 'Portainer → Stacks → chaitin → Environment variables / Secrets', '确认 .env 不提交，页面和容器日志也不回显密钥。'],
-  ['03', '验证 OctoBus 三层注册', '在 OctoBus 控制台确认每个 Agent 分别被授权到 service → instance → capset；Agent 仅知道 OctoBus 地址。', 'security: security-triage-service → security-triage-demo → security-triage\nmalware: malware-analysis-service → malware-analysis-demo → malware-analysis', '确认能力、令牌和 Agent 一一对应；不可跨 capset 调用。'],
-  ['04', '用 Stack 发布', '在 Portainer 更新 chaitin Stack。服务应使用 restart: always，OctoBus 不发布公网端口，控制台只绑定 127.0.0.1；首次启用发布中心时同时部署 release-runner。', 'Portainer → Stacks → chaitin → Update the stack', '确认 agent-compose、octobus、demo-console、release-runner 均为 running。'],
-  ['05', '容器与重启验收', '从 Portainer 查看三个容器日志和重启策略；只通过 Stack 管理配置、重启与镜像更新。', 'Portainer → Stacks → chaitin → Containers', '重启 demo/Agent 后，SQLite 状态卷与 restart: always 应恢复；不要直接改生产容器。'],
-  ['06', '在本页回放验证', '先跑“正常”案例，再依次演示槽位缺失、RAG 拒答、LLM 超时、OctoBus 失败和多轮切换。', '左侧选择案例 → 检查预填 → 手动发送', '逐项确认右侧 trace_id、OctoBus 三层链路、模型输出、审计卡和日志均一致。'],
-  ['07', '启用受控发布（可选）', '默认 RELEASE_MODE=preview。真实发布前，由管理员在服务器 Secret 文件配置 release-runner token 和页面确认码，再设置 RELEASE_MODE=enabled。', '在 /data/chaitin/secrets/ 创建两个 0600 secret 文件；不要填入仓库、Stack 文本或页面。', '发布器没有公网端口，且仅允许两个固定项目和已推送的 40 位 commit。'],
-  ['08', '交付前边界复核', '确认无明文密钥、无样本、无 IOC 正文进入仓库或 UI；检查端口、审计和 README 操作记录。', 'git status && docker ps && Portainer Stack review', '保留 trace_id 与脱敏运行证据；异常应转人工而非绕过 OctoBus。']
-];
-
 function caseForMessage(message) {
   const exact = state.cases.find((item) => item.user === message);
   if (exact) return exact.id;
@@ -121,14 +110,6 @@ function renderAudit(audit) {
     const details = document.createElement('dl'); details.className = 'audit-details'; for (const [name, value] of [['trace_id', row.traceId], ['授权主体', row.principal], ['策略', row.policy], ['证据摘要', row.evidence]]) { const item = document.createElement('div'); item.append(textNode('dt', name), textNode('dd', value)); details.append(item); } card.append(details); board.append(card);
   }
 }
-function renderRunbook() {
-  const board = $('#runbook'); clear(board);
-  for (const [number, title, body, command, check] of runbook) {
-    const card = document.createElement('article'); card.className = 'runbook-step'; const head = document.createElement('div'); head.className = 'runbook-head'; head.append(textNode('span', number), textNode('b', title)); card.append(head, textNode('p', body));
-    const commandBox = document.createElement('div'); commandBox.className = 'command-box'; const code = textNode('code', command); const copy = textNode('button', '复制'); copy.type = 'button'; copy.addEventListener('click', () => copyText(command, copy)); commandBox.append(code, copy); card.append(commandBox);
-    const checkLine = document.createElement('div'); checkLine.className = 'check-line'; checkLine.append(textNode('b', '检查点'), textNode('span', check)); card.append(checkLine); board.append(card);
-  }
-}
 function releaseResult(message, tone = '') {
   const box = $('#release-result'); box.textContent = message; box.className = `release-result ${tone}`;
 }
@@ -181,7 +162,7 @@ async function replay(id, userText) { const response = await fetch('/api/replay'
 function selectTab(button) { document.querySelectorAll('.tabs button').forEach((item) => item.classList.toggle('active', item === button)); document.querySelectorAll('.panel').forEach((item) => item.classList.toggle('active', item.id === button.dataset.tab)); }
 async function boot() {
   [state.cases, state.config] = await Promise.all([fetch('/api/cases').then((res) => res.json()), fetch('/api/config').then((res) => res.json())]);
-  $('#mode').textContent = `${state.config.mode.toUpperCase()} MODE`; renderCases(); renderMetrics(); renderRunbook(); releaseMode();
+  $('#mode').textContent = `${state.config.mode.toUpperCase()} MODE`; renderCases(); renderMetrics(); releaseMode();
   document.querySelectorAll('.filter').forEach((button) => button.addEventListener('click', () => { state.domain = button.dataset.domain; document.querySelectorAll('.filter').forEach((item) => item.classList.toggle('active', item === button)); renderCases(); }));
   document.querySelectorAll('.tabs button').forEach((button) => button.addEventListener('click', () => selectTab(button)));
   document.querySelectorAll('[data-dialog-target]').forEach((button) => button.addEventListener('click', () => $(`#${button.dataset.dialogTarget}`).showModal()));
