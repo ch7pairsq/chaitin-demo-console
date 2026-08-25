@@ -7,7 +7,7 @@ services:
     restart: always
     pull_policy: always
     environment:
-      DEMO_MODE: replay
+      DEMO_MODE: hybrid
       DEMO_CONSOLE_PORT: 7411
       # Non-secret optional navigation link; leave blank to hide the action.
       PORTAINER_URL: ${PORTAINER_URL:-}
@@ -16,11 +16,14 @@ services:
       RELEASE_RUNNER_URL: http://release-runner:7420
       RELEASE_RUNNER_TOKEN_FILE: /run/secrets/release_runner_token
       RELEASE_UI_CONFIRMATION_FILE: /run/secrets/release_ui_confirmation
+      AGENT_TRIGGER_BRIDGE_URL: http://agent-trigger-bridge:7430
+      AGENT_TRIGGER_BRIDGE_TOKEN_FILE: /run/secrets/agent_trigger_bridge_token
     ports:
       - 127.0.0.1:7411:7411
     volumes:
       - /data/chaitin/secrets/release-runner-token:/run/secrets/release_runner_token:ro
       - /data/chaitin/secrets/release-ui-confirmation:/run/secrets/release_ui_confirmation:ro
+      - /data/chaitin/secrets/agent-trigger-bridge-token:/run/secrets/agent_trigger_bridge_token:ro
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=32m
@@ -31,8 +34,31 @@ services:
     networks:
       - chaitin-net
 
-  # The only Stack component with access to Docker's control socket. It has no
-  # host port; requests must come from demo-console and carry its server secret.
+  # Dedicated internal-only trigger gate. It never exposes a host port and
+  # accepts only the two fixed safe security cases compiled into the image.
+  agent-trigger-bridge:
+    image: ghcr.io/ch7pairsq/chaitin-demo-console:trigger-bridge
+    container_name: agent-trigger-bridge
+    restart: always
+    pull_policy: always
+    environment:
+      AGENT_TRIGGER_BRIDGE_PORT: 7430
+      AGENT_TRIGGER_BRIDGE_TOKEN_FILE: /run/secrets/agent_trigger_bridge_token
+      HOME: /tmp
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /data/chaitin/secrets/agent-trigger-bridge-token:/run/secrets/agent_trigger_bridge_token:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - chaitin-net
+
+  # Separate from the trigger gate: it is only for controlled project release.
   release-runner:
     image: ghcr.io/ch7pairsq/chaitin-demo-console:release-runner
     container_name: chaitin-release-runner

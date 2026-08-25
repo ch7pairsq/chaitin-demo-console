@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createDemoServer } from '../server.mjs';
+import { createTriggerBridge } from '../trigger-bridge/agent-trigger-bridge.mjs';
 
-async function withServer(run) {
-  const server = createDemoServer();
+async function withServer(run, options) {
+  const server = createDemoServer(options);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   try { await run(`http://127.0.0.1:${server.address().port}`); } finally { await new Promise((resolve) => server.close(resolve)); }
 }
@@ -45,6 +46,53 @@ test('does not expose a live backend bridge by default', async () => withServer(
   assert.equal(response.status, 501);
   assert.equal((await response.json()).error, 'live_mode_not_enabled');
 }));
+
+test('browser live request is limited to the manually prepared case and only calls the internal trigger bridge', async () => {
+  const prior = Object.fromEntries(['DEMO_MODE', 'AGENT_TRIGGER_BRIDGE_URL', 'AGENT_TRIGGER_BRIDGE_TOKEN'].map((key) => [key, process.env[key]]));
+  process.env.DEMO_MODE = 'hybrid';
+  process.env.AGENT_TRIGGER_BRIDGE_URL = 'http://agent-trigger-bridge:7430';
+  process.env.AGENT_TRIGGER_BRIDGE_TOKEN = 'bridge-test-token';
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ status: 'ACCEPTED', triggerId: '11111111-1111-1111-1111-111111111111', project: 'security-triage-agent', agent: 'triage-operator', flow: 'octobus', acceptedAt: '2026-08-25T00:00:00.000Z' }), { status: 202, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    await withServer(async (base) => {
+      const rejected = await fetch(`${base}/api/live`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ caseId: 'security-normal', message: '任意提示词不能成为 Agent 指令' }) });
+      assert.equal(rejected.status, 403);
+      const accepted = await fetch(`${base}/api/live`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ caseId: 'security-normal', message: '研判告警 A-1001：授权扫描时段的 DNS 活动' }) });
+      assert.equal(accepted.status, 202);
+      assert.equal((await accepted.json()).flow, 'octobus');
+    }, { fetchImpl });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, 'http://agent-trigger-bridge:7430/trigger');
+    assert.equal(calls[0].options.headers.authorization, 'Bearer bridge-test-token');
+    assert.equal(calls[0].options.body, JSON.stringify({ caseId: 'security-normal' }));
+  } finally {
+    for (const [key, value] of Object.entries(prior)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});
+
+test('internal trigger bridge uses a closed case map and execFile arguments', async () => {
+  const calls = [];
+  const bridge = createTriggerBridge({ token: 'bridge-token', execute: async (bin, args, options) => { calls.push({ bin, args, options }); return { stdout: JSON.stringify({ runId: 'run-12345678' }) }; }, now: () => '2026-08-25T00:00:00.000Z' });
+  await new Promise((resolve) => bridge.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${bridge.address().port}`;
+  try {
+    assert.equal((await fetch(`${base}/trigger`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ caseId: 'security-normal' }) })).status, 401);
+    assert.equal((await fetch(`${base}/trigger`, { method: 'POST', headers: { authorization: 'Bearer bridge-token', 'content-type': 'application/json' }, body: JSON.stringify({ caseId: 'malware-normal' }) })).status, 403);
+    const accepted = await fetch(`${base}/trigger`, { method: 'POST', headers: { authorization: 'Bearer bridge-token', 'content-type': 'application/json' }, body: JSON.stringify({ caseId: 'security-normal', prompt: 'ignored' }) });
+    const body = await accepted.json();
+    assert.equal(accepted.status, 202);
+    assert.equal(body.flow, 'octobus');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].bin, 'docker');
+    assert.deepEqual(calls[0].args.slice(0, 9), ['exec', 'agent-compose', 'agent-compose', '--json', '-p', 'security-triage-agent', 'run', 'triage-operator', '--prompt']);
+    assert.match(calls[0].args[9], /A-1001/);
+    assert.equal(calls[0].args.includes('ignored'), false);
+  } finally { await new Promise((resolve) => bridge.close(resolve)); }
+});
 
 test('keeps knowledge proof in the top-level dialog instead of the trace tabs', () => {
   const page = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');

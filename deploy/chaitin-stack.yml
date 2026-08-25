@@ -6,6 +6,7 @@
 #   /data/chaitin/secrets/release-runner-token                         (0600)
 #   /data/chaitin/secrets/release-ui-confirmation                      (0600)
 #   /data/chaitin/secrets/agent-compose-ui-script-token                (0600)
+#   /data/chaitin/secrets/agent-trigger-bridge-token                   (0600)
 # No raw samples, private IOC, OctoBus token, model key, or private key is
 # written in this file. Keep RELEASE_MODE=preview for the first deployment.
 name: chaitin
@@ -142,7 +143,9 @@ services:
     restart: always
     pull_policy: never
     environment:
-      DEMO_MODE: replay
+      # Hybrid keeps evidence replay for all cases and enables live runs only
+      # for the two server-approved normal security cases below.
+      DEMO_MODE: hybrid
       DEMO_CONSOLE_PORT: 7411
       # Optional navigation link only; never put a Portainer credential here.
       PORTAINER_URL: ${PORTAINER_URL:-https://8.147.68.154:9443}
@@ -151,14 +154,42 @@ services:
       RELEASE_RUNNER_URL: http://release-runner:7420
       RELEASE_RUNNER_TOKEN_FILE: /run/secrets/release_runner_token
       RELEASE_UI_CONFIRMATION_FILE: /run/secrets/release_ui_confirmation
+      AGENT_TRIGGER_BRIDGE_URL: http://agent-trigger-bridge:7430
+      AGENT_TRIGGER_BRIDGE_TOKEN_FILE: /run/secrets/agent_trigger_bridge_token
     ports:
       - 127.0.0.1:7411:7411
     volumes:
       - /data/chaitin/secrets/release-runner-token:/run/secrets/release_runner_token:ro
       - /data/chaitin/secrets/release-ui-confirmation:/run/secrets/release_ui_confirmation:ro
+      - /data/chaitin/secrets/agent-trigger-bridge-token:/run/secrets/agent_trigger_bridge_token:ro
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=32m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - chaitin-net
+
+  # Internal-only command gate for the controlled browser demonstration.
+  # It is intentionally separate from release-runner: its token, allow-list,
+  # and Docker operation are dedicated to Agent Compose runs, never releases.
+  agent-trigger-bridge:
+    image: ghcr.io/ch7pairsq/chaitin-demo-console:trigger-bridge
+    container_name: agent-trigger-bridge
+    restart: always
+    pull_policy: never
+    environment:
+      AGENT_TRIGGER_BRIDGE_PORT: 7430
+      AGENT_TRIGGER_BRIDGE_TOKEN_FILE: /run/secrets/agent_trigger_bridge_token
+      HOME: /tmp
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /data/chaitin/secrets/agent-trigger-bridge-token:/run/secrets/agent_trigger_bridge_token:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
     security_opt:
       - no-new-privileges:true
     cap_drop:

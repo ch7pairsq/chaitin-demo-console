@@ -48,6 +48,18 @@ function releaseSettings() {
   } catch { /* Release remains safely unavailable. */ }
   return { mode, ready: mode === 'enabled' && Boolean(gatewayUrl && runnerToken && confirmation), gatewayUrl, runnerToken, confirmation };
 }
+function liveSettings() {
+  const requestedMode = process.env.DEMO_MODE || 'replay';
+  const gateway = process.env.AGENT_TRIGGER_BRIDGE_URL || '';
+  const token = secretValue('AGENT_TRIGGER_BRIDGE_TOKEN');
+  let gatewayUrl = '';
+  try {
+    const parsed = new URL(gateway);
+    // The bridge is internal-only; never accept a public URL from Stack env.
+    if (parsed.protocol === 'http:' && parsed.hostname === 'agent-trigger-bridge') gatewayUrl = parsed.toString().replace(/\/$/, '');
+  } catch { /* Live mode safely remains unavailable. */ }
+  return { enabled: requestedMode === 'hybrid', ready: requestedMode === 'hybrid' && Boolean(gatewayUrl && token), gatewayUrl, token };
+}
 function releaseRequest(body) {
   const project = body?.project;
   const target = body?.target ?? 'commit';
@@ -83,13 +95,14 @@ async function bodyOf(request) {
   return body ? JSON.parse(body) : {};
 }
 
-export function createDemoServer() {
+export function createDemoServer({ fetchImpl = fetch } = {}) {
   return createServer(async (request, response) => {
     try {
       const url = new URL(request.url, `http://${request.headers.host}`);
       if (request.method === 'GET' && url.pathname === '/api/config') {
         const release = releaseSettings();
-        return json(response, 200, { mode, portainerUrl: portainerUrl(), release: { mode: release.mode, ready: release.ready, confirmationRequired: true } });
+        const live = liveSettings();
+        return json(response, 200, { mode, portainerUrl: portainerUrl(), release: { mode: release.mode, ready: release.ready, confirmationRequired: true }, live: { enabled: live.enabled, ready: live.ready } });
       }
       if (request.method === 'GET' && url.pathname === '/api/cases') return json(response, 200, demoCases.map(({ logs, audit, ...item }) => item));
       if (request.method === 'GET' && url.pathname === '/metrics') return metrics(response);
@@ -117,7 +130,7 @@ export function createDemoServer() {
         releaseInFlight = true;
         try {
           const abort = new AbortController(); const timer = setTimeout(() => abort.abort(), 190_000);
-          const upstream = await fetch(`${settings.gatewayUrl}/release`, { method: 'POST', signal: abort.signal, headers: { authorization: `Bearer ${settings.runnerToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ project: payload.project, revision: payload.commit }) });
+          const upstream = await fetchImpl(`${settings.gatewayUrl}/release`, { method: 'POST', signal: abort.signal, headers: { authorization: `Bearer ${settings.runnerToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ project: payload.project, revision: payload.commit }) });
           clearTimeout(timer);
           if (!upstream.ok) return json(response, 502, { error: 'release_runner_failed' });
           const result = await upstream.json();
@@ -125,7 +138,24 @@ export function createDemoServer() {
         } catch { return json(response, 502, { error: 'release_runner_unreachable' }); }
         finally { releaseInFlight = false; }
       }
-      if (request.method === 'POST' && url.pathname === '/api/live') return json(response, 501, { error: 'live_mode_not_enabled', message: '实时模式需部署受控 OctoBus bridge；当前页面仅执行安全回放。' });
+      if (request.method === 'POST' && url.pathname === '/api/live') {
+        const settings = liveSettings();
+        if (!settings.enabled) return json(response, 501, { error: 'live_mode_not_enabled', message: '当前为安全回放模式；未启用服务端受控触发器。' });
+        const { caseId, message } = await bodyOf(request);
+        if (typeof caseId !== 'string' || !/^[a-z0-9-]{1,64}$/.test(caseId) || typeof message !== 'string') return json(response, 400, { error: 'invalid_live_request' });
+        const selected = demoCases.find((item) => item.id === caseId);
+        // A browser cannot turn this endpoint into a general Agent prompt API.
+        if (!selected || selected.user !== message) return json(response, 403, { error: 'prepared_case_required' });
+        if (!settings.ready) return json(response, 503, { error: 'live_trigger_not_ready', message: '受控触发器尚未就绪；不会降级为浏览器直连。' });
+        try {
+          const abort = new AbortController(); const timer = setTimeout(() => abort.abort(), 15_000);
+          const upstream = await fetchImpl(`${settings.gatewayUrl}/trigger`, { method: 'POST', signal: abort.signal, headers: { authorization: `Bearer ${settings.token}`, 'content-type': 'application/json' }, body: JSON.stringify({ caseId }) });
+          clearTimeout(timer);
+          const result = await upstream.json().catch(() => ({}));
+          if (!upstream.ok) return json(response, upstream.status === 403 ? 409 : 502, { error: result.error || 'live_trigger_failed', message: result.message || '受控触发未被接受；未执行浏览器直连。' });
+          return json(response, 202, { status: result.status, triggerId: result.triggerId, project: result.project, agent: result.agent, flow: result.flow, acceptedAt: result.acceptedAt });
+        } catch { return json(response, 502, { error: 'live_trigger_unreachable', message: '受控触发器不可达；不会直接调用 Agent Compose 或 OctoBus。' }); }
+      }
       if (request.method === 'GET') {
         const relative = url.pathname === '/' ? 'index.html' : normalize(url.pathname).replace(/^[/\\]+/, '');
         if (relative.includes('..')) return json(response, 400, { error: 'invalid_path' });

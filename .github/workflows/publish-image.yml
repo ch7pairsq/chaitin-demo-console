@@ -55,3 +55,11 @@ jobs:
           tags: |
             ${{ env.IMAGE_NAME }}:release-runner
             ${{ env.IMAGE_NAME }}:release-runner-${{ github.sha }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: trigger-bridge
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:trigger-bridge
+            ${{ env.IMAGE_NAME }}:trigger-bridge-${{ github.sha }}
