@@ -25,7 +25,7 @@ ssh -i $SshKey "root@$Server" 'hostnamectl; docker version --format "{{.Server.V
 docker ps --filter 'label=com.docker.compose.project=chaitin' --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
 ```
 
-通过标准：`agent-compose`、`octobus`、`malware-triage-demo-console` 处于 `Up`。部署 release-runner 后还应有 `chaitin-release-runner`。
+通过标准：`agent-compose`、`octobus`、`agent-compose-ui`、`malware-triage-demo-console` 处于 `Up`。部署 release-runner 后还应有 `chaitin-release-runner`。
 
 ## 3. 验证自动恢复策略与公网端口边界
 
@@ -33,7 +33,7 @@ docker ps --filter 'label=com.docker.compose.project=chaitin' --format 'table {{
 docker inspect agent-compose octobus malware-triage-demo-console --format '{{.Name}} restart={{.HostConfig.RestartPolicy.Name}} ports={{json .NetworkSettings.Ports}}'
 ```
 
-通过标准：服务使用 `always`（或 Stack 规定的自动恢复策略）；`octobus` 不出现宿主机 Published Port；演示控制台只应绑定 `127.0.0.1`。
+通过标准：服务使用 `always`（或 Stack 规定的自动恢复策略）；`octobus` 不出现宿主机 Published Port；Agent Compose、Agent Compose UI 与演示控制台只应绑定 `127.0.0.1`。
 
 ## 4. 检查 Secret 与部署变量权限，不读取内容
 

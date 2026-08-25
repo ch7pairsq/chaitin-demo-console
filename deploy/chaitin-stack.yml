@@ -72,6 +72,38 @@ services:
     networks:
       - chaitin-net
 
+  # Browser UI for Agent Compose. It authenticates browser users and proxies
+  # requests to the daemon through the internal Stack network; it never mounts
+  # the Docker socket or private knowledge base.
+  agent-compose-ui:
+    image: ghcr.io/chaitin/agent-compose-ui:latest
+    container_name: agent-compose-ui
+    restart: always
+    pull_policy: always
+    depends_on:
+      - agent-compose
+    environment:
+      AGENT_COMPOSE_BACKEND: http://agent-compose:7410
+      AUTH_USERNAME: ${AUTH_USERNAME:-admin}
+      # Configure these two values only in Portainer Stack environment
+      # variables. They are UI login values, never Git repository content.
+      AUTH_PASSWORD: ${AUTH_PASSWORD:?set AUTH_PASSWORD in Portainer}
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in Portainer}
+      UI_DATABASE_PATH: /data/agent-compose-ui.db
+      JUPYTER_PROXY_BASE: /jupyter
+      NGINX_JUPYTER_PROXY_BASE: /jupyter
+    volumes:
+      - /data/chaitin/agent-compose/ui:/data
+      - /data/chaitin/agent-compose/data/sandboxes:/data/sandboxes:ro
+    ports:
+      - 127.0.0.1:${AGENT_COMPOSE_UI_HTTP_PORT:-7412}:8000
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - chaitin-net
+
   demo-console:
     image: ghcr.io/ch7pairsq/chaitin-demo-console:latest
     container_name: malware-triage-demo-console
@@ -81,7 +113,7 @@ services:
       DEMO_MODE: replay
       DEMO_CONSOLE_PORT: 7411
       # Optional navigation link only; never put a Portainer credential here.
-      PORTAINER_URL: ${PORTAINER_URL:-}
+      PORTAINER_URL: ${PORTAINER_URL:-https://8.147.68.154:9443}
       # Keep preview until the Stack and release-runner health checks pass.
       RELEASE_MODE: ${RELEASE_MODE:-preview}
       RELEASE_RUNNER_URL: http://release-runner:7420
