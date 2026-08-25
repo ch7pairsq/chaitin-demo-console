@@ -79,7 +79,9 @@ services:
     image: ghcr.io/chaitin/agent-compose-ui:latest
     container_name: agent-compose-ui
     restart: always
-    pull_policy: always
+    # The image is pre-pulled by the administrator. Do not block a Stack
+    # update on registry access; fail clearly if the local image is absent.
+    pull_policy: never
     depends_on:
       - agent-compose
     environment:
@@ -108,7 +110,7 @@ services:
     image: ghcr.io/ch7pairsq/chaitin-demo-console:latest
     container_name: malware-triage-demo-console
     restart: always
-    pull_policy: always
+    pull_policy: never
     environment:
       DEMO_MODE: replay
       DEMO_CONSOLE_PORT: 7411
@@ -141,7 +143,7 @@ services:
     image: ghcr.io/ch7pairsq/chaitin-demo-console:release-runner
     container_name: chaitin-release-runner
     restart: always
-    pull_policy: always
+    pull_policy: never
     environment:
       RELEASE_RUNNER_PORT: 7420
       RELEASE_RUNNER_TOKEN_FILE: /run/secrets/release_runner_token
