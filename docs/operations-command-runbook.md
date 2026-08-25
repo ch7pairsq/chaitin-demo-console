@@ -27,6 +27,8 @@ docker ps --filter 'label=com.docker.compose.project=chaitin' --format 'table {{
 
 通过标准：`agent-compose`、`octobus`、`agent-compose-ui`、`malware-triage-demo-console` 处于 `Up`。部署 release-runner 后还应有 `chaitin-release-runner`。
 
+`agent-compose-ui` 镜像的 Nginx 实际监听容器 `80` 端口；Stack 将其只映射为 `127.0.0.1:7412`。该镜像自带的 gRPC 风格 healthcheck 会访问不存在的路径并导致 Portainer 长时间显示 `starting`，因此完整 Stack 已覆盖为根路径 HTTP 探针。更新后应显示 `healthy`，而不是持续 `starting`。
+
 若服务器到镜像仓库网络不稳定，可在更新 Stack 前由管理员先执行 `docker pull`，再保持 Stack 中的 `pull_policy: never`。这样 Stack 只使用已经存在的镜像；若镜像缺失会明确失败，而不会在 Portainer 页面长时间等待下载。
 
 ## 3. 验证自动恢复策略与公网端口边界
