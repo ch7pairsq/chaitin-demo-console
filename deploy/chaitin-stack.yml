@@ -169,6 +169,11 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    # Bootstrap reads root-only mounted secrets, then image entrypoint drops
+    # permanently to node before starting server.mjs.
+    cap_add:
+      - SETUID
+      - SETGID
     networks:
       - chaitin-net
 

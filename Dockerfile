@@ -1,7 +1,8 @@
 FROM node:22.5.1-bookworm-slim AS console
 WORKDIR /app
 COPY . .
-USER node
+RUN chmod 0555 /app/docker-entrypoint.sh
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 EXPOSE 7411
 CMD ["node", "server.mjs"]
 
