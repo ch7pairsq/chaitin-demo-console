@@ -75,7 +75,9 @@ function renderOctoBus(result) {
   $('#path-protocol').textContent = `Connect RPC · trace_id=${result.traceId}`; $('#path-principal').textContent = `${result.domain}-agent · 最小权限 capset token`;
 }
 function renderModel(model) {
-  $('#model-status').textContent = model.status; $('#model-provider').textContent = model.provider; $('#model-policy').textContent = model.requestPolicy; $('#model-output').textContent = model.response;
+  $('#model-status').textContent = model.status; $('#model-provider').textContent = model.provider; $('#model-policy').textContent = model.requestPolicy;
+  $('#model-input').textContent = model.input; $('#model-input-state').textContent = model.inputState;
+  $('#model-output').textContent = model.response; $('#model-output-state').textContent = model.outputState;
   $('#model-citations').textContent = model.citations.length ? model.citations.join('  ·  ') : '无引用；模型未被调用。'; $('#model-guardrail').textContent = model.guardrail;
 }
 function proofFact(name, value) {

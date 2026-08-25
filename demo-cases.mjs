@@ -94,6 +94,28 @@ function buildCase({ id, domain, title, user, outcome, reply, steps, severity = 
     provider: 'DeepSeek API (server-side only)',
     model: 'deepseek-chat',
     requestPolicy: '仅发送 allow-list 脱敏特征与 citation_id；不发送样本、路径、IOC 正文、令牌或密钥。',
+    input: JSON.stringify(domain === 'security' ? {
+      task: 'explain_deterministic_security_decision',
+      allowed_context: {
+        alert_reference: id === 'security-ioc' ? 'A-private (reference only)' : 'A-1001',
+        evidence_summary: id === 'security-ioc' ? 'private evidence matched: evidence_id/source_type only' : 'authorized scan window + DNS activity + registered asset',
+        rule_id: id === 'security-ioc' ? 'threat-evidence escalation gate' : 'fp_dns_001',
+        deterministic_action: id === 'security-ioc' ? 'open_case_for_human_review' : 'suppress_with_review',
+        citations: id === 'security-ioc' ? ['evidence:private-reference-only'] : ['evidence:alert-context-min', 'rule:fp_dns_001']
+      },
+      excluded_fields: ['raw_ioc', 'raw_log', 'asset_identity', 'credential', 'capset_token']
+    } : {
+      task: 'explain_candidate_rule_for_human_review',
+      allowed_context: {
+        sample_reference: 'sample_id reference only',
+        profile: 'android-apk',
+        evidence_summary: 'normalized behavior and permission categories',
+        citations: ['citation:report-02', 'citation:kb-07'],
+        release_policy: 'autoPublish=false; human_review_required=true'
+      },
+      excluded_fields: ['sample_bytes', 'file_path', 'raw_network_indicator', 'credential', 'capset_token']
+    }, null, 2),
+    inputState: id === 'malware-llm' ? '已发送 · 8 秒超时' : '已发送 · allow-list 脱敏上下文',
     response: outcome === 'HUMAN_REVIEW_REQUIRED' && id === 'malware-llm'
       ? '模型请求在 8 秒超时；确定性摘要已接管，保留人工复核。'
       : outcome === 'HUMAN_REVIEW_REQUIRED' && id === 'security-schema-fallback'
@@ -101,11 +123,12 @@ function buildCase({ id, domain, title, user, outcome, reply, steps, severity = 
       : domain === 'security'
         ? '【受限解释】证据满足 fp_dns_001 的授权扫描条件；建议 suppress_with_review。风险等级与动作由规则引擎决定。'
         : '【受限解释】行为与权限组合满足候选规则条件；引用 citation:report-02、citation:kb-07。候选规则必须先验证并人工复核。',
+    outputState: id === 'malware-llm' ? '无有效输出 · 超时降级' : id === 'security-schema-fallback' ? '已拒绝 · JSON Schema 校验失败' : '已验证 · JSON Schema 通过',
     status: outcome === 'HUMAN_REVIEW_REQUIRED' && ['malware-llm', 'security-schema-fallback'].includes(id) ? 'FALLBACK · deterministic narrator' : 'OK · schema validated',
     citations: domain === 'security' ? ['evidence:alert-context-min', 'rule:fp_dns_001'] : ['citation:report-02', 'citation:kb-07'],
     guardrail: '模型没有工具凭据、不可改变 severity/action，JSON 解析失败或超时即降级。'
   } : {
-    provider: '未调用模型', model: '—', requestPolicy: '该路径在状态机入口拒绝、收集槽位或调用失败；模型未参与。', response: '无模型输出。', status: 'NOT INVOKED', citations: [], guardrail: '避免将闲聊、缺槽位或工具故障的输入无条件发送给 LLM。'
+    provider: '未调用模型', model: '—', requestPolicy: '该路径在状态机入口拒绝、收集槽位或调用失败；模型未参与。', input: '未发送。该案例在模型调用前已被状态机拦截或转人工，避免把无效、缺槽位或工具故障输入交给模型。', inputState: '未发送 · 状态机拦截', response: '无模型输出。', outputState: '无输出 · 未调用', status: 'NOT INVOKED', citations: [], guardrail: '避免将闲聊、缺槽位或工具故障的输入无条件发送给 LLM。'
   };
   return { id, domain, title, user, traceId, outcome, severity, verification, reply, octobus, llm, knowledgeProof: knowledgeProof({ id, domain }), steps: fullSteps, logs, audit };
 }
