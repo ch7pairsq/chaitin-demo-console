@@ -81,7 +81,7 @@ test('browser live request is limited to the manually prepared case and only cal
   }
 });
 
-test('internal trigger bridge maps every built-in case to fixed execFile arguments', async () => {
+test('internal trigger bridge maps every built-in case to fixed runtime arguments', async () => {
   const calls = [];
   const bridge = createTriggerBridge({ token: 'bridge-token', execute: async (args) => { calls.push({ args }); return { stdout: JSON.stringify({ runId: 'run-12345678' }) }; }, now: () => '2026-08-25T00:00:00.000Z' });
   await new Promise((resolve) => bridge.listen(0, '127.0.0.1', resolve));
