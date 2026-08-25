@@ -9,20 +9,40 @@ const execFile = promisify(execFileCallback);
 const port = Number(process.env.AGENT_TRIGGER_BRIDGE_PORT || 7430);
 
 // This is deliberately a closed map. Browser text is never used as a shell
-// command or forwarded as a free-form prompt to the Agent.
+// command or forwarded as a free-form prompt to the Agent. Every UI case gets
+// a real Agent Compose run; the operation preserves the case safety boundary.
+const securityRun = (alertId, label) => ({
+  project: 'security-triage-agent',
+  agent: 'triage-operator',
+  flow: 'agent-compose-to-octobus',
+  prompt: `Controlled browser verification: ${label}. Run \`cd agent && node src/cli.js --alert-id ${alertId}\`. Preserve traceId and report only state, matched rule id or evidence id, and capability result. Do not print secrets, raw logs, or IOC values; do not call any backend directly.`
+});
+const malwareTurn = (sessionId, message, label) => ({
+  project: 'malware-triage-agent',
+  agent: 'malware-triage-operator',
+  flow: 'agent-compose-state-machine',
+  prompt: `Controlled browser verification: ${label}. Run \`cd agent && node src/cli.js --session-id ${sessionId} --message '${message}'\`. Report only the state-machine action and safe slot names. Do not inspect, upload, execute, or print a sample; do not print secrets or call a backend directly unless the deterministic workflow explicitly permits its approved OctoBus capability.`
+});
+const malwareSelfCheck = (label) => ({
+  project: 'malware-triage-agent',
+  agent: 'malware-triage-operator',
+  flow: 'agent-compose-self-check',
+  prompt: `Controlled browser verification: ${label}. Run \`cd agent && node src/cli.js --self-check\`; report only check statuses. Do not inspect samples, print secrets, or call a backend directly.`
+});
+
 export const liveCaseAllowList = Object.freeze({
-  'security-normal': {
-    project: 'security-triage-agent',
-    agent: 'triage-operator',
-    flow: 'octobus',
-    prompt: 'Controlled browser verification for the pre-approved alert A-1001. Run `cd agent && node src/cli.js --alert-id A-1001`. Preserve traceId and report only state, matched rule id, and capability result. Do not print secrets, raw logs, or IOC values; do not call any backend directly.'
-  },
-  'security-ioc': {
-    project: 'security-triage-agent',
-    agent: 'triage-operator',
-    flow: 'octobus',
-    prompt: 'Controlled browser verification for the pre-approved alert A-private. Run `cd agent && node src/cli.js --alert-id A-private`. Preserve traceId and report only state, evidence id, and capability result. Do not print secrets, raw logs, or IOC values; do not call any backend directly.'
-  }
+  'security-normal': securityRun('A-1001', 'authorized DNS scan suppression review'),
+  'security-ioc': securityRun('A-private', 'private evidence escalation review'),
+  'security-record-fail': securityRun('A-1001', 'recording-failure manual handoff replay'),
+  'security-slots': securityRun('A-2002', 'incomplete alert context review'),
+  'security-schema-fallback': securityRun('A-1001', 'model schema fallback replay'),
+  'malware-normal': malwareTurn('live-malware-normal', '研判 sample_id demo-android-001 SHA-256 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa android-apk', 'sanitized malware workflow'),
+  'malware-slots': malwareTurn('live-malware-slots', '研判 sample_id demo-missing-hash', 'missing SHA-256 slot collection'),
+  'malware-chat': malwareTurn('live-malware-chat', '今天天气如何', 'unsupported intent refusal'),
+  'malware-rag': malwareTurn('live-malware-rag', '研判 sample_id demo-low-evidence SHA-256 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb android-apk', 'insufficient-evidence workflow'),
+  'malware-llm': malwareSelfCheck('LLM timeout fallback replay boundary'),
+  'malware-gateway': malwareSelfCheck('OctoBus transient failure replay boundary'),
+  'malware-switch': malwareTurn('live-malware-switch', '先查任务状态，再继续补充 SHA-256', 'multi-turn context pause')
 });
 
 function json(response, status, body) {
@@ -74,7 +94,7 @@ export function createTriggerBridge({ token = tokenFromEnvironment(), execute = 
       if (!sameSecret(authorization.replace(/^Bearer\s+/i, ''), token)) return json(response, 401, { error: 'unauthorized' });
       const body = await requestBody(request);
       const entry = typeof body.caseId === 'string' ? liveCaseAllowList[body.caseId] : undefined;
-      if (!entry) return json(response, 403, { error: 'case_not_live_enabled', message: '此案例仅允许脱敏回放；实时触发仅开放经审批的正常安全运营案例。' });
+      if (!entry) return json(response, 403, { error: 'case_not_live_enabled', message: '案例未在受控执行白名单中。' });
       const agentComposeRunId = await startAgentRun(entry, execute);
       const triggerId = randomUUID();
       accepted.set(triggerId, { triggerId, caseId: body.caseId, ...entry, agentComposeRunId, acceptedAt: now() });
