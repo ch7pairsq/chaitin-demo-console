@@ -76,7 +76,7 @@ test('browser live request is limited to the manually prepared case and only cal
 
 test('internal trigger bridge maps every built-in case to fixed execFile arguments', async () => {
   const calls = [];
-  const bridge = createTriggerBridge({ token: 'bridge-token', execute: async (bin, args, options) => { calls.push({ bin, args, options }); return { stdout: JSON.stringify({ runId: 'run-12345678' }) }; }, now: () => '2026-08-25T00:00:00.000Z' });
+  const bridge = createTriggerBridge({ token: 'bridge-token', execute: async (args) => { calls.push({ args }); return { stdout: JSON.stringify({ runId: 'run-12345678' }) }; }, now: () => '2026-08-25T00:00:00.000Z' });
   await new Promise((resolve) => bridge.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${bridge.address().port}`;
   try {
@@ -92,9 +92,8 @@ test('internal trigger bridge maps every built-in case to fixed execFile argumen
     assert.equal(body.flow, 'agent-compose-to-octobus');
     assert.equal(calls.length, allCases.length + 1);
     const latest = calls.at(-1);
-    assert.equal(latest.bin, 'docker');
-    assert.deepEqual(latest.args.slice(0, 9), ['exec', 'agent-compose', 'agent-compose', '--json', '-p', 'security-triage-agent', 'run', 'triage-operator', '--prompt']);
-    assert.match(latest.args[9], /A-1001/);
+    assert.deepEqual(latest.args.slice(0, 7), ['agent-compose', '--json', '-p', 'security-triage-agent', 'run', 'triage-operator', '--prompt']);
+    assert.match(latest.args[7], /A-1001/);
     assert.equal(latest.args.includes('ignored'), false);
   } finally { await new Promise((resolve) => bridge.close(resolve)); }
 });

@@ -20,7 +20,6 @@ EXPOSE 7420
 CMD ["node", "release-runner.mjs"]
 
 FROM node:22.5.1-bookworm-slim AS trigger-bridge
-RUN apt-get update && apt-get install -y --no-install-recommends docker.io && rm -rf /var/lib/apt/lists/*
 WORKDIR /bridge
 COPY trigger-bridge/agent-trigger-bridge.mjs ./agent-trigger-bridge.mjs
 EXPOSE 7430

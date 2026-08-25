@@ -1,11 +1,8 @@
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { execFile as execFileCallback } from 'node:child_process';
-import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
-const execFile = promisify(execFileCallback);
 const port = Number(process.env.AGENT_TRIGGER_BRIDGE_PORT || 7430);
 
 // This is deliberately a closed map. Browser text is never used as a shell
@@ -75,17 +72,36 @@ function runIdFrom(stdout) {
   const candidate = String(stdout).match(/\b[a-z0-9-]{8,128}\b/i)?.[0];
   return candidate || null;
 }
-export async function startAgentRun(entry, execute = execFile) {
-  const { stdout } = await execute('docker', [
-    'exec', 'agent-compose', 'agent-compose', '--json', '-p', entry.project,
+function dockerRequest(method, path, payload) {
+  return new Promise((resolve, reject) => {
+    const body = payload === undefined ? '' : JSON.stringify(payload);
+    const request = httpRequest({ socketPath: '/var/run/docker.sock', method, path: `/v1.41${path}`, headers: body ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } : undefined }, (response) => {
+      let output = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => { output += chunk; if (output.length > 8 * 1024) response.destroy(new Error('docker_response_too_large')); });
+      response.on('end', () => response.statusCode >= 200 && response.statusCode < 300 ? resolve(output) : reject(new Error(`docker_api_${response.statusCode}`)));
+    });
+    request.setTimeout(12_000, () => request.destroy(new Error('docker_api_timeout')));
+    request.on('error', reject);
+    request.end(body);
+  });
+}
+async function dockerExec(args, transport = dockerRequest) {
+  const created = JSON.parse(await transport('POST', '/containers/agent-compose/exec', { AttachStdout: true, AttachStderr: true, Cmd: args }));
+  if (typeof created.Id !== 'string' || !/^[a-f0-9]{64}$/i.test(created.Id)) throw new Error('docker_exec_id_missing');
+  return { stdout: await transport('POST', `/exec/${created.Id}/start`, { Detach: false, Tty: false }) };
+}
+export async function startAgentRun(entry, execute = dockerExec) {
+  const { stdout } = await execute([
+    'agent-compose', '--json', '-p', entry.project,
     'run', entry.agent, '--prompt', entry.prompt, '--detach'
-  ], { timeout: 12_000, maxBuffer: 8 * 1024, windowsHide: true });
+  ]);
   const agentComposeRunId = runIdFrom(stdout);
   if (!agentComposeRunId) throw new Error('agent_compose_run_id_missing');
   return agentComposeRunId;
 }
 
-export function createTriggerBridge({ token = tokenFromEnvironment(), execute = execFile, now = () => new Date().toISOString() } = {}) {
+export function createTriggerBridge({ token = tokenFromEnvironment(), execute = dockerExec, now = () => new Date().toISOString() } = {}) {
   const accepted = new Map();
   return createServer(async (request, response) => {
     try {
