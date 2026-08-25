@@ -25,6 +25,30 @@ services:
       DEFAULT_IMAGE: chaitin/agent-compose-guest:latest
       AGENT_COMPOSE_RUNTIME_BASE_URL: http://agent-compose:7410
       TZ: Asia/Shanghai
+    # The daemon's Codex provider needs its own persistent model configuration.
+    # Do not put the model key in this Stack.  The entrypoint below reads only
+    # the three LLM fields from the existing root-only project .env file, which
+    # is already mounted read-only for controlled project deployment.
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - |
+        source_env=/deploy/malware-triage-agent/.env
+        read_env_value() {
+          sed -n "s/^$$1=//p" "$$source_env" | tail -n 1 | tr -d '\r'
+        }
+        LLM_API_ENDPOINT="$$(read_env_value LLM_BASE_URL)"
+        LLM_API_KEY="$$(read_env_value MALWARE_TRIAGE_LLM_API_KEY)"
+        LLM_MODEL="$$(read_env_value LLM_MODEL)"
+        if [ -z "$$LLM_API_ENDPOINT" ] || [ -z "$$LLM_API_KEY" ] || [ -z "$$LLM_MODEL" ]; then
+          echo 'agent-compose LLM bootstrap: required root-only model configuration is missing' >&2
+          exit 78
+        fi
+        export LLM_API_ENDPOINT LLM_API_KEY LLM_MODEL
+        # DeepSeek is OpenAI-compatible through Chat Completions, not Responses.
+        export LLM_API_PROTOCOL=chat_completions
+        exec /usr/bin/tini -- /app/agent-compose daemon
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /etc/localtime:/etc/localtime:ro

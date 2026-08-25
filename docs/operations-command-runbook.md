@@ -41,6 +41,37 @@ docker inspect agent-compose octobus malware-triage-demo-console --format '{{.Na
 stat -c '%a %U:%G %n' /data/chaitin/deploy-manifests/security-triage-agent/.env /data/chaitin/deploy-manifests/malware-triage-agent/.env /data/chaitin/secrets/release-runner-token /data/chaitin/secrets/release-ui-confirmation
 ```
 
+### Agent Compose 模型运行时恢复检查
+
+`codex` Provider 的定时任务由 Agent Compose Runtime 调用模型，不能依赖浏览器或临时会话中的 Provider 配置。完整 Stack 会在启动时从恶意样本项目的 root-only `.env` 中**仅读取** `LLM_BASE_URL`、`MALWARE_TRIAGE_LLM_API_KEY` 与 `LLM_MODEL`，并映射为 Agent Compose 官方需要的 `LLM_API_ENDPOINT`、`LLM_API_KEY`、`LLM_MODEL`；DeepSeek 固定使用 `LLM_API_PROTOCOL=chat_completions`。模型 Key 不会写入 Stack、Git、日志或浏览器。
+
+更新 Stack 前，仅核验三个值已设置，不显示其内容：
+
+```sh
+ENV_FILE=/data/chaitin/deploy-manifests/malware-triage-agent/.env
+for key in LLM_BASE_URL MALWARE_TRIAGE_LLM_API_KEY LLM_MODEL; do
+  value=$(sed -n "s/^${key}=//p" "$ENV_FILE" | tail -n 1)
+  if [ -n "$value" ]; then echo "$key=SET"; else echo "$key=MISSING"; fi
+done
+```
+
+通过标准：三项均为 `SET`。若任一项为 `MISSING`，Stack 会以退出码 `78` 停止 Agent Compose，而不是让调度任务长时间 `running` 后才超时。
+
+更新 Stack 后，仅查看 PID 1 中是否存在必要变量名，绝不输出变量值：
+
+```sh
+docker exec agent-compose sh -c '
+for key in LLM_API_ENDPOINT LLM_API_KEY LLM_MODEL LLM_API_PROTOCOL; do
+  if tr "\000" "\n" </proc/1/environ | grep -q "^${key}="; then
+    echo "$key=SET"
+  else
+    echo "$key=MISSING"
+  fi
+done'
+```
+
+通过标准：四项均为 `SET`，其中协议必须为 `chat_completions`（该值不属于密钥，必要时可在 Stack 审阅中核对）。
+
 通过标准：文件为 `600 root:root`（或等效最小权限）。**不要执行 `cat`、`printenv`、`docker inspect` 环境变量全文输出或截图。**
 
 ## 5. 验证 Agent 项目注册与版本状态
