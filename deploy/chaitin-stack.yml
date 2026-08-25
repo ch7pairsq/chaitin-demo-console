@@ -5,6 +5,7 @@
 #   /data/chaitin/deploy-manifests/malware-triage-agent/.env           (0600)
 #   /data/chaitin/secrets/release-runner-token                         (0600)
 #   /data/chaitin/secrets/release-ui-confirmation                      (0600)
+#   /data/chaitin/secrets/agent-compose-ui-script-token                (0600)
 # No raw samples, private IOC, OctoBus token, model key, or private key is
 # written in this file. Keep RELEASE_MODE=preview for the first deployment.
 name: chaitin
@@ -94,15 +95,35 @@ services:
       UI_DATABASE_PATH: /data/agent-compose-ui.db
       JUPYTER_PROXY_BASE: /jupyter
       NGINX_JUPYTER_PROXY_BASE: /jupyter
+    # The upstream UI requires a separate token for its local script service.
+    # Read it only from the root-owned server file rather than Portainer env.
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - |
+        token_file=/run/secrets/agent-compose-ui-script-token
+        test -r "$$token_file"
+        SCRIPT_SERVICE_TOKEN="$$(tr -d '\r\n' < "$$token_file")"
+        test -n "$$SCRIPT_SERVICE_TOKEN"
+        export SCRIPT_SERVICE_TOKEN
+        exec /init
     volumes:
       - /data/chaitin/agent-compose/ui:/data
       - /data/chaitin/agent-compose/data/sandboxes:/data/sandboxes:ro
+      - /data/chaitin/secrets/agent-compose-ui-script-token:/run/secrets/agent-compose-ui-script-token:ro
     ports:
       - 127.0.0.1:${AGENT_COMPOSE_UI_HTTP_PORT:-7412}:8000
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    # Needed only while Nginx initializes its cache directory and drops to
+    # the unprivileged worker user; validated with the upstream image.
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
     networks:
       - chaitin-net
 

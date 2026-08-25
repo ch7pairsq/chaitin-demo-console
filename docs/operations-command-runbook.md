@@ -40,7 +40,7 @@ docker inspect agent-compose octobus malware-triage-demo-console --format '{{.Na
 ## 4. 检查 Secret 与部署变量权限，不读取内容
 
 ```sh
-stat -c '%a %U:%G %n' /data/chaitin/deploy-manifests/security-triage-agent/.env /data/chaitin/deploy-manifests/malware-triage-agent/.env /data/chaitin/secrets/release-runner-token /data/chaitin/secrets/release-ui-confirmation
+stat -c '%a %U:%G %n' /data/chaitin/deploy-manifests/security-triage-agent/.env /data/chaitin/deploy-manifests/malware-triage-agent/.env /data/chaitin/secrets/release-runner-token /data/chaitin/secrets/release-ui-confirmation /data/chaitin/secrets/agent-compose-ui-script-token
 ```
 
 ### Agent Compose 模型运行时恢复检查
@@ -75,6 +75,10 @@ done'
 通过标准：四项均为 `SET`，其中协议必须为 `chat_completions`（该值不属于密钥，必要时可在 Stack 审阅中核对）。
 
 通过标准：文件为 `600 root:root`（或等效最小权限）。**不要执行 `cat`、`printenv`、`docker inspect` 环境变量全文输出或截图。**
+
+### Agent Compose UI 启动密钥
+
+Agent Compose UI 的内置 script-service 必须获得独立的 `SCRIPT_SERVICE_TOKEN`；它仅用于 UI 内部的脚本服务认证，不能复用模型 Key、OctoBus token 或发布器 token。Stack 从 `/data/chaitin/secrets/agent-compose-ui-script-token` 读取该值并注入进程，不在 Git、Portainer 页面或容器检查输出中出现。若日志出现 `SCRIPT_SERVICE_TOKEN is required`，表示该文件尚未创建或为空。
 
 ## 5. 验证 Agent 项目注册与版本状态
 
